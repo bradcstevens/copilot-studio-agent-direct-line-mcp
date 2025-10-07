@@ -4,6 +4,14 @@
   "description": "MCP server for Microsoft Copilot Studio Agent integration via Direct Line 3.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "copilot-studio-agent-direct-line-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    ".env.example"
+  ],
   "engines": {
     "node": ">=18.0.0"
   },
@@ -22,10 +30,21 @@
     "copilot-studio",
     "direct-line",
     "bot-framework",
-    "microsoft"
+    "microsoft",
+    "model-context-protocol",
+    "chatbot",
+    "conversational-ai"
   ],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bradcstevens/copilot-studio-agent-direct-line-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bradcstevens/copilot-studio-agent-direct-line-mcp/issues"
+  },
+  "homepage": "https://github.com/bradcstevens/copilot-studio-agent-direct-line-mcp#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.19.1",
     "axios": "^1.12.2",
