@@ -2,10 +2,12 @@
 
 Easily install the Copilot Studio Agent Direct Line MCP Server for VS Code or VS Code Insiders:
 
-[![Install with NPX in VS Code](https://img.shields.io/badge/VS_Code-Install_Copilot_Studio_MCP_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=copilot-studio&config=%7B%20%22type%22%3A%20%22stdio%22%2C%20%22command%22%3A%20%22npx%22%2C%20%22args%22%3A%20%5B%22-y%22%2C%20%22copilot-studio-agent-direct-line-mcp%22%5D%7D)
-[![Install with NPX in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Install_Copilot_Studio_MCP_Server-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=copilot-studio&quality=insiders&config=%7B%20%22type%22%3A%20%22stdio%22%2C%20%22command%22%3A%20%22npx%22%2C%20%22args%22%3A%20%5B%22-y%22%2C%20%22copilot-studio-agent-direct-line-mcp%22%5D%7D)
+[![Install with NPX in VS Code](https://img.shields.io/badge/VS_Code-Install_Copilot_Studio_MCP_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=copilot-studio&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22copilot-studio-agent-direct-line-mcp%22%5D%2C%22env%22%3A%7B%22DIRECT_LINE_SECRET%22%3A%22%24%7Binput%3Adirect_line_secret%7D%22%7D%7D&inputs=%5B%7B%22id%22%3A%22direct_line_secret%22%2C%22type%22%3A%22promptString%22%2C%22description%22%3A%22Direct%20Line%20secret%20key%20from%20your%20Copilot%20Studio%20Agent%22%7D%5D)
+[![Install with NPX in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Install_Copilot_Studio_MCP_Server-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=copilot-studio&quality=insiders&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22copilot-studio-agent-direct-line-mcp%22%5D%2C%22env%22%3A%7B%22DIRECT_LINE_SECRET%22%3A%22%24%7Binput%3Adirect_line_secret%7D%22%7D%7D&inputs=%5B%7B%22id%22%3A%22direct_line_secret%22%2C%22type%22%3A%22promptString%22%2C%22description%22%3A%22Direct%20Line%20secret%20key%20from%20your%20Copilot%20Studio%20Agent%22%7D%5D)
 
 This TypeScript project provides a **local** MCP server for Microsoft Copilot Studio Agents, enabling you to interact with your Copilot Studio Agents directly from your code editor via the Direct Line 3.0 API.
+
+**📦 Available on NPM:** [copilot-studio-agent-direct-line-mcp](https://www.npmjs.com/package/copilot-studio-agent-direct-line-mcp)
 
 ## 📄 Table of Contents
 
@@ -18,17 +20,35 @@ This TypeScript project provides a **local** MCP server for Microsoft Copilot St
   - [🔌 Installation \& Getting Started](#-installation--getting-started)
     - [Prerequisites](#prerequisites)
     - [Installation](#installation)
-      - [✨ One-Click Install](#-one-click-install)
-      - [🧨 Install from GitHub (Recommended)](#-install-from-github-recommended)
-        - [Steps](#steps)
+      - [✨ One-Click Install (Recommended)](#-one-click-install-recommended)
+      - [🧨 Manual Install with NPX](#-manual-install-with-npx)
+      - [🛠️ Install from Source (For Development)](#️-install-from-source-for-development)
   - [🔧 Configuration](#-configuration)
   - [🚀 Development](#-development)
   - [📖 Usage](#-usage)
+    - [Standalone Server Usage](#standalone-server-usage)
+    - [Using the Tools](#using-the-tools)
+    - [MCP Tools Reference](#mcp-tools-reference)
+      - [`send_message`](#send_message)
+      - [`start_conversation`](#start_conversation)
+      - [`end_conversation`](#end_conversation)
+      - [`get_conversation_history`](#get_conversation_history)
   - [🏗️ Architecture](#️-architecture)
   - [🔑 Key Components](#-key-components)
+    - [DirectLineClient](#directlineclient)
+    - [TokenManager](#tokenmanager)
+    - [ConversationManager](#conversationmanager)
+    - [CircuitBreaker](#circuitbreaker)
   - [🛡️ Error Handling](#️-error-handling)
   - [🔒 Security](#-security)
   - [📝 Troubleshooting](#-troubleshooting)
+    - [MCP Server Not Connecting in VS Code](#mcp-server-not-connecting-in-vs-code)
+    - [Direct Line Connection Issues](#direct-line-connection-issues)
+    - [Common Errors](#common-errors)
+      - [Failed to generate Direct Line token](#failed-to-generate-direct-line-token)
+      - [Conversation not found or expired](#conversation-not-found-or-expired)
+      - [Circuit breaker is OPEN](#circuit-breaker-is-open)
+    - [Example VS Code mcp.json Configuration](#example-vs-code-mcpjson-configuration)
   - [🧪 Testing](#-testing)
   - [📌 Contributing](#-contributing)
   - [License](#license)
@@ -80,31 +100,65 @@ For the best experience, use Visual Studio Code and GitHub Copilot.
 
 ### Installation
 
-#### ✨ One-Click Install
+#### ✨ One-Click Install (Recommended)
 
-[![Install with NPX in VS Code](https://img.shields.io/badge/VS_Code-Install_Copilot_Studio_MCP_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=copilot-studio&config=%7B%20%22type%22%3A%20%22stdio%22%2C%20%22command%22%3A%20%22npx%22%2C%20%22args%22%3A%20%5B%22-y%22%2C%20%22copilot-studio-agent-direct-line-mcp%22%5D%7D)
-[![Install with NPX in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Install_Copilot_Studio_MCP_Server-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=copilot-studio&quality=insiders&config=%7B%20%22type%22%3A%20%22stdio%22%2C%20%22command%22%3A%20%22npx%22%2C%20%22args%22%3A%20%5B%22-y%22%2C%20%22copilot-studio-agent-direct-line-mcp%22%5D%7D)
+Click one of the badges below to automatically configure the MCP server in VS Code:
 
-After installation, select GitHub Copilot Agent Mode and refresh the tools list. Learn more about Agent Mode in the [VS Code Documentation](https://code.visualstudio.com/docs/copilot/chat/chat-agent-mode).
+[![Install with NPX in VS Code](https://img.shields.io/badge/VS_Code-Install_Copilot_Studio_MCP_Server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=copilot-studio&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22copilot-studio-agent-direct-line-mcp%22%5D%2C%22env%22%3A%7B%22DIRECT_LINE_SECRET%22%3A%22%24%7Binput%3Adirect_line_secret%7D%22%7D%7D&inputs=%5B%7B%22id%22%3A%22direct_line_secret%22%2C%22type%22%3A%22promptString%22%2C%22description%22%3A%22Direct%20Line%20secret%20key%20from%20your%20Copilot%20Studio%20Agent%22%7D%5D)
+[![Install with NPX in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Install_Copilot_Studio_MCP_Server-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect/mcp/install?name=copilot-studio&quality=insiders&config=%7B%22type%22%3A%22stdio%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22copilot-studio-agent-direct-line-mcp%22%5D%2C%22env%22%3A%7B%22DIRECT_LINE_SECRET%22%3A%22%24%7Binput%3Adirect_line_secret%7D%22%7D%7D&inputs=%5B%7B%22id%22%3A%22direct_line_secret%22%2C%22type%22%3A%22promptString%22%2C%22description%22%3A%22Direct%20Line%20secret%20key%20from%20your%20Copilot%20Studio%20Agent%22%7D%5D)
 
-#### 🧨 Install from GitHub (Recommended)
+After clicking, VS Code will:
+1. Prompt you for your Direct Line secret key
+2. Automatically configure the MCP server
+3. Start the server using `npx` (no manual installation needed!)
 
-This installation method is the easiest for development and testing.
+Then:
+1. Select GitHub Copilot Agent Mode
+2. Click "Select Tools" and choose the available Copilot Studio tools
+3. Try a prompt like: `Start a conversation with my Copilot Studio Agent`
 
-##### Steps
+Learn more about Agent Mode in the [VS Code Documentation](https://code.visualstudio.com/docs/copilot/chat/chat-agent-mode).
 
-1. Clone this repository:
+#### 🧨 Manual Install with NPX
+
+If you prefer manual configuration, add this to your `.vscode/mcp.json` file:
+
+```json
+{
+  "inputs": [
+    {
+      "id": "direct_line_secret",
+      "type": "promptString",
+      "description": "Direct Line secret key from your Copilot Studio Agent"
+    }
+  ],
+  "servers": {
+    "copilot-studio": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "copilot-studio-agent-direct-line-mcp"],
+      "env": {
+        "DIRECT_LINE_SECRET": "${input:direct_line_secret}"
+      }
+    }
+  }
+}
+```
+
+Save the file and click 'Start' in the MCP Server panel. VS Code will prompt you for your Direct Line secret.
+
+#### 🛠️ Install from Source (For Development)
+
+For contributing or local development:
 
 ```bash
+# Clone and build
 git clone https://github.com/bradcstevens/copilot-studio-agent-direct-line-mcp.git
 cd copilot-studio-agent-direct-line-mcp
 npm install
 npm run build
-```
 
-2. In your project, add a `.vscode/mcp.json` file with the following content:
-
-```json
+# Add to .vscode/mcp.json
 {
   "inputs": [
     {
@@ -128,20 +182,28 @@ npm run build
 
 **Important:** Replace `/absolute/path/to/` with the actual path to the cloned repository.
 
-3. Save the file, then click 'Start' in the MCP Server panel.
-
-4. In chat, switch to [Agent Mode](https://code.visualstudio.com/blogs/2025/02/24/introducing-copilot-agent-mode).
-
-5. Click "Select Tools" and choose the available tools.
-
-6. Open GitHub Copilot Chat and try a prompt like `Start a conversation with my Copilot Studio Agent`.
-
-> 💥 We strongly recommend creating a `.github/copilot-instructions.md` in your project. This will enhance your experience using the Copilot Studio Agent Direct Line MCP Server with GitHub Copilot Chat.
-> To start, just include "`This project uses Microsoft Copilot Studio Agents. Always check to see if the Copilot Studio MCP server has a tool relevant to the user's request`" in your copilot instructions file.
+> 💥 **Pro Tip:** Create a `.github/copilot-instructions.md` file in your project with:
+> ```
+> This project uses Microsoft Copilot Studio Agents. Always check to see if the 
+> Copilot Studio MCP server has a tool relevant to the user's request.
+> ```
+> This will enhance your experience with GitHub Copilot Chat!
 
 ## 🔧 Configuration
 
-Create `.env` file based on `.env.example`:
+### Using NPX (Recommended)
+
+When using `npx`, configuration is handled through VS Code's MCP input prompts or environment variables:
+
+- **DIRECT_LINE_SECRET** (required): Your Direct Line secret key from Copilot Studio
+- **LOG_LEVEL** (optional): Logging level (default: `info`)
+- **TOKEN_REFRESH_INTERVAL** (optional): Token refresh interval in milliseconds (default: `1800000` = 30 minutes)
+
+The one-click install will automatically prompt you for the Direct Line secret. For manual configuration, you can add these to the `env` section of your `mcp.json` file.
+
+### Using Source Installation
+
+Create a `.env` file based on `.env.example`:
 
 ```bash
 # Required
@@ -170,12 +232,19 @@ npm run format
 
 ## 📖 Usage
 
+### Using with VS Code
+
+After installation, the MCP server runs automatically when you use GitHub Copilot. The server is invoked via `npx`, which automatically downloads and runs the latest version from NPM.
+
 ### Standalone Server Usage
 
 You can run the server standalone for testing or integration with other MCP clients:
 
 ```bash
-# After building
+# Using npx (recommended)
+DIRECT_LINE_SECRET=your_secret npx -y copilot-studio-agent-direct-line-mcp
+
+# Or from source after building
 node dist/index.js
 ```
 
@@ -345,18 +414,24 @@ The server implements comprehensive error handling:
 
 ### Example VS Code mcp.json Configuration
 
-Here's a complete example configuration for macOS:
+Here's a complete example configuration using npx (works on all platforms):
 
 ```json
 {
+  "inputs": [
+    {
+      "id": "direct_line_secret",
+      "type": "promptString",
+      "description": "Direct Line secret key from your Copilot Studio Agent"
+    }
+  ],
   "servers": {
     "copilot-studio": {
-      "command": "node",
-      "args": [
-        "/Users/yourname/code/copilot-studio-agent-direct-line-mcp/dist/index.js"
-      ],
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "copilot-studio-agent-direct-line-mcp"],
       "env": {
-        "DIRECT_LINE_SECRET": "your_secret_here",
+        "DIRECT_LINE_SECRET": "${input:direct_line_secret}",
         "LOG_LEVEL": "info",
         "TOKEN_REFRESH_INTERVAL": "1800000"
       }
@@ -365,16 +440,15 @@ Here's a complete example configuration for macOS:
 }
 ```
 
-**Windows example:**
+**Alternative: Hardcoded secret (not recommended for shared projects):**
 
 ```json
 {
   "servers": {
     "copilot-studio": {
-      "command": "node",
-      "args": [
-        "C:\\Users\\yourname\\code\\copilot-studio-agent-direct-line-mcp\\dist\\index.js"
-      ],
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "copilot-studio-agent-direct-line-mcp"],
       "env": {
         "DIRECT_LINE_SECRET": "your_secret_here"
       }
@@ -385,9 +459,26 @@ Here's a complete example configuration for macOS:
 
 ## 🧪 Testing
 
-Run the included test client to verify functionality:
+### Testing the MCP Server
+
+The easiest way to test is through VS Code after installation:
+
+1. Install using the one-click badge or manual npx configuration
+2. Open GitHub Copilot Chat in Agent Mode
+3. Try prompts like:
+   - "Start a conversation with my Copilot Studio Agent"
+   - "Send a message: Hello, what can you help me with?"
+   - "Get the conversation history"
+
+### Running Test Client (For Development)
+
+If you've cloned the repository, you can run the included test client:
 
 ```bash
+# Set your Direct Line secret
+export DIRECT_LINE_SECRET=your_secret_here
+
+# Run tests
 npx tsx tests/test-mcp-client.ts
 ```
 
