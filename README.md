@@ -7,8 +7,6 @@ Easily install the Copilot Studio Agent Direct Line MCP Server for VS Code or VS
 
 This TypeScript project provides a **local** MCP server for Microsoft Copilot Studio Agents, enabling you to interact with your Copilot Studio Agents directly from your code editor via the Direct Line 3.0 API.
 
-**📦 Available on NPM:** [copilot-studio-agent-direct-line-mcp](https://www.npmjs.com/package/copilot-studio-agent-direct-line-mcp)
-
 ## 📄 Table of Contents
 
 - [⭐ Copilot Studio Agent Direct Line MCP Server](#-copilot-studio-agent-direct-line-mcp-server)
@@ -24,8 +22,11 @@ This TypeScript project provides a **local** MCP server for Microsoft Copilot St
       - [🧨 Manual Install with NPX](#-manual-install-with-npx)
       - [🛠️ Install from Source (For Development)](#️-install-from-source-for-development)
   - [🔧 Configuration](#-configuration)
+    - [Using NPX (Recommended)](#using-npx-recommended)
+    - [Using Source Installation](#using-source-installation)
   - [🚀 Development](#-development)
   - [📖 Usage](#-usage)
+    - [Using with VS Code](#using-with-vs-code)
     - [Standalone Server Usage](#standalone-server-usage)
     - [Using the Tools](#using-the-tools)
     - [MCP Tools Reference](#mcp-tools-reference)
@@ -50,6 +51,8 @@ This TypeScript project provides a **local** MCP server for Microsoft Copilot St
       - [Circuit breaker is OPEN](#circuit-breaker-is-open)
     - [Example VS Code mcp.json Configuration](#example-vs-code-mcpjson-configuration)
   - [🧪 Testing](#-testing)
+    - [Testing the MCP Server](#testing-the-mcp-server)
+    - [Running Test Client (For Development)](#running-test-client-for-development)
   - [📌 Contributing](#-contributing)
   - [License](#license)
   - [💬 Support](#-support)

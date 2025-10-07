@@ -49,7 +49,7 @@ export class CopilotStudioMCPServer {
     this.server = new Server(
       {
         name: 'copilot-studio-agent-direct-line-mcp',
-        version: '1.0.2',
+        version: '1.0.3',
       },
       {
         capabilities: {
