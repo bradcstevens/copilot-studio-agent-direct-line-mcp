@@ -1,0 +1,7 @@
+dist/
+node_modules/
+coverage/
+*.json
+.taskmaster/
+.claude/
+.claude-collective/

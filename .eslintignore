@@ -1,0 +1,8 @@
+dist/
+node_modules/
+*.js
+*.mjs
+coverage/
+.taskmaster/
+.claude/
+.claude-collective/
