@@ -81,6 +81,14 @@ The Copilot Studio Agent Direct Line MCP Server is built with tools that are con
 - ✅ **Input Validation** - Zod schemas for type-safe validation
 - ✅ **Security** - Secret masking in logs, secure environment configuration
 
+## 🔐 Authentication Requirements
+
+> **Important:** This MCP server currently supports **Copilot Studio Agents configured with "No authentication"** only.
+>
+> In Copilot Studio, ensure your agent's **Security > Authentication** setting is set to **"No authentication"** for this MCP server to work properly.
+>
+> 🚧 **Coming Soon:** Entra ID (Azure AD) authentication support is under development and will be available in a future release.
+
 ## ⚒️ Supported Tools
 
 Interact with your Copilot Studio Agent using these tools:
