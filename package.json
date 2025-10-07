@@ -1,6 +1,6 @@
 {
   "name": "copilot-studio-agent-direct-line-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server for Microsoft Copilot Studio Agent integration via Direct Line 3.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
