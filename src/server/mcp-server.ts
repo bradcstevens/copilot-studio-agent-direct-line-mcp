@@ -48,8 +48,8 @@ export class CopilotStudioMCPServer {
     // Initialize MCP server
     this.server = new Server(
       {
-        name: 'copilot-studio-direct-line',
-        version: '1.0.0',
+        name: 'copilot-studio-agent-direct-line-mcp',
+        version: '1.0.1',
       },
       {
         capabilities: {
