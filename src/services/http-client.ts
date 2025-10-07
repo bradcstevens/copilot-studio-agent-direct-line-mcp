@@ -40,7 +40,7 @@ export function createHttpClient(options: HttpClientOptions = {}): AxiosInstance
     timeout,
     headers: {
       'Content-Type': 'application/json',
-      'User-Agent': 'copilot-studio-agent-direct-line-mcp/1.0.1',
+      'User-Agent': 'copilot-studio-agent-direct-line-mcp/1.0.2',
     },
   });
 
