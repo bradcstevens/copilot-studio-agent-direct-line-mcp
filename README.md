@@ -96,11 +96,24 @@ The MCP server supports different authentication modes depending on the transpor
 > - Best for: Production deployments, multi-user environments, enterprise applications
 >
 > **Authentication Flow:**
-> 1. User navigates to `https://your-server/auth/login`
-> 2. Redirected to Microsoft sign-in page
-> 3. After authentication, redirected back to your app
-> 4. Session cookie issued for authenticated access
-> 5. All MCP tool calls require valid session
+> 1. MCP client (e.g., VS Code) attempts to connect → receives 401 Unauthorized
+> 2. Client discovers OAuth endpoints via `.well-known/oauth-authorization-server`
+> 3. Client opens browser to `/authorize` with `redirect_uri` and `state` parameters
+> 4. User is redirected to Microsoft sign-in page
+> 5. After authentication, server redirects back to client's callback URL with authorization code
+> 6. Client exchanges code for access token via `/auth/token`
+> 7. All subsequent MCP requests include bearer token for authentication
+>
+> **VS Code Integration:**
+> - Automatic OAuth discovery and flow initiation
+> - Browser window opens for authentication
+> - Window automatically closes after successful authentication
+> - Bearer token authentication for all MCP tool calls
+>
+> **Session Management:**
+> - `SESSION_SECRET` is auto-generated if not provided (recommended)
+> - Sessions timeout after 24 hours of inactivity (configurable)
+> - Multiple concurrent sessions supported per user
 >
 > For detailed setup and configuration, see:
 > - **[Authentication Modes Guide](./docs/AUTHENTICATION_MODES.md)** - Complete authentication documentation
@@ -276,7 +289,7 @@ ENTRA_CLIENT_SECRET=your-client-secret
 ENTRA_REDIRECT_URI=http://localhost:3000/auth/callback
 ENTRA_SCOPES=openid,profile,email
 HTTP_PORT=3000
-SESSION_SECRET=generate-a-strong-random-secret
+# SESSION_SECRET is auto-generated if not provided
 ALLOWED_ORIGINS=http://localhost:3000
 ```
 

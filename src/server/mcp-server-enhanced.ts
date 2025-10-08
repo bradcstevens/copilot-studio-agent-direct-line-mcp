@@ -4,6 +4,8 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -634,6 +636,43 @@ export class EnhancedMCPServer {
     }
 
     return logs;
+  }
+
+  /**
+   * Handle SSE connection (GET /mcp)
+   */
+  async handleSSEConnection(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    console.log('[MCP] Creating SSE transport for new connection');
+
+    // Create SSE transport
+    const transport = new SSEServerTransport('/mcp', res);
+
+    // Connect server to transport
+    await this.server.connect(transport);
+
+    // Start the SSE stream
+    await transport.start();
+
+    console.log(`[MCP] SSE connection established, session: ${transport.sessionId}`);
+  }
+
+  /**
+   * Handle SSE message (POST /mcp)
+   */
+  async handleSSEMessage(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    // Parse request body
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      chunks.push(chunk);
+    }
+    const body = Buffer.concat(chunks).toString('utf-8');
+    const parsedBody = JSON.parse(body);
+
+    console.log('[MCP] Received SSE message:', parsedBody.method || 'unknown method');
+
+    // Create temporary transport just to handle this message
+    const transport = new SSEServerTransport('/mcp', res);
+    await transport.handlePostMessage(req, res, parsedBody);
   }
 
   /**

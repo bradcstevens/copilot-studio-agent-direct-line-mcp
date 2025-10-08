@@ -5,6 +5,7 @@
  * Main entry point with support for stdio and HTTP transport modes
  */
 
+import { randomBytes } from 'crypto';
 import { getEnv } from './config/env.js';
 import { DirectLineClient } from './services/directline-client.js';
 import { TokenManager } from './services/token-manager.js';
@@ -79,7 +80,7 @@ async function main(): Promise<void> {
         case 'file':
           sessionStore = new FileSessionStore({
             storageDir: process.env.SESSION_STORAGE_DIR || '.sessions',
-            encryptionKey: process.env.SESSION_ENCRYPTION_KEY || process.env.SESSION_SECRET || 'default-key',
+            encryptionKey: process.env.SESSION_ENCRYPTION_KEY || process.env.SESSION_SECRET || randomBytes(32).toString('hex'),
           });
           console.log('[SessionStore] File-based session store initialized');
           break;
@@ -108,7 +109,7 @@ async function main(): Promise<void> {
         httpServer = new MCPHttpServer(
           {
             port: process.env.HTTP_PORT ? parseInt(process.env.HTTP_PORT, 10) : 3000,
-            sessionSecret: process.env.SESSION_SECRET || 'mcp-session-secret',
+            sessionSecret: process.env.SESSION_SECRET || randomBytes(32).toString('hex'),
             allowedOrigins: process.env.ALLOWED_ORIGINS?.split(','),
             trustProxy: process.env.TRUST_PROXY === 'true',
           },
@@ -129,12 +130,16 @@ async function main(): Promise<void> {
     // Set up graceful shutdown
     setupShutdownHandlers();
 
-    // Start the server
-    await server.start();
-
     // Start HTTP server if configured
     if (httpServer) {
+      // Connect MCP server to HTTP server before starting
+      httpServer.setMCPServer(server);
       httpServer.start();
+    }
+
+    // Start the server (stdio transport only runs if HTTP mode is not active)
+    if (transportMode === 'stdio') {
+      await server.start();
     }
 
     console.log('✅ Server ready and listening for MCP requests');

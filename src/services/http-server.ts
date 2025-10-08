@@ -11,6 +11,7 @@ import { randomBytes } from 'crypto';
 import type { EntraIDClient } from './entraid-client.js';
 import type { SessionManager } from './session-manager.js';
 import type { UserContext, TokenMetadata, SecurityTracking } from '../types/session.js';
+import type { EnhancedMCPServer } from '../server/mcp-server-enhanced.js';
 import { SSEService } from './sse-service.js';
 
 /**
@@ -37,6 +38,7 @@ export class MCPHttpServer {
   private entraidClient: EntraIDClient;
   private sessionManager: SessionManager;
   private sseService: SSEService;
+  private mcpServer: EnhancedMCPServer | null = null;
 
   /**
    * Create a new MCP HTTP Server
@@ -178,10 +180,27 @@ export class MCPHttpServer {
     // OAuth login endpoint
     this.app.get('/auth/login', async (req, res) => {
       try {
+        // Log all query parameters for debugging
+        console.log('[OAuth] Login request query parameters:', req.query);
+
+        // VS Code sends redirect_uri and state parameters
+        const vscodeRedirectUri = req.query.redirect_uri as string | undefined;
+        const vscodeState = req.query.state as string | undefined;
+
         const { authUrl, state } = await this.entraidClient.initiateAuthFlow();
 
         // Store state in session for validation
         (req.session as any).oauthState = state;
+
+        // Store VS Code's redirect_uri and state if present
+        if (vscodeRedirectUri) {
+          (req.session as any).vscodeRedirectUri = vscodeRedirectUri;
+          console.log('[OAuth] Stored VS Code redirect_uri:', vscodeRedirectUri);
+        }
+        if (vscodeState) {
+          (req.session as any).vscodeState = vscodeState;
+          console.log('[OAuth] Stored VS Code state:', vscodeState);
+        }
 
         res.redirect(authUrl);
       } catch (error) {
@@ -193,22 +212,22 @@ export class MCPHttpServer {
     // OAuth callback endpoint
     this.app.get('/auth/callback', async (req, res) => {
       try {
-        const { code, state } = req.query;
+        const { code, state: oauthState } = req.query;
 
-        if (!code || !state) {
+        if (!code || !oauthState) {
           return res.status(400).json({ error: 'Missing code or state parameter' });
         }
 
         // Validate state
         const storedState = (req.session as any).oauthState;
-        if (state !== storedState) {
+        if (oauthState !== storedState) {
           return res.status(400).json({ error: 'Invalid state parameter' });
         }
 
         // Exchange code for tokens
         const authResult = await this.entraidClient.handleCallback(
           code as string,
-          state as string
+          oauthState as string
         );
 
         if (!authResult.account) {
@@ -254,9 +273,34 @@ export class MCPHttpServer {
         (req.session as any).sessionId = sessionId;
         (req.session as any).sessionToken = sessionToken;
 
-        // Show success page
-        const displayName = userContext.name || userContext.email || 'User';
-        res.send(this.getSuccessPageHTML(displayName));
+        // Check if this is an OAuth flow from VS Code
+        const vscodeRedirectUri = (req.session as any).vscodeRedirectUri;
+        const vscodeState = (req.session as any).vscodeState;
+
+        if (vscodeRedirectUri) {
+          // For VS Code OAuth, redirect back to VS Code with authorization code
+          // VS Code expects: redirect_uri?code=AUTH_CODE&state=STATE
+          console.log('[OAuth] VS Code auth flow detected, redirecting to:', vscodeRedirectUri);
+          console.log('[OAuth] Session token (as code):', sessionToken);
+          console.log('[OAuth] VS Code state:', vscodeState);
+
+          const redirectUrl = new URL(vscodeRedirectUri);
+          redirectUrl.searchParams.set('code', sessionToken);
+          if (vscodeState) {
+            redirectUrl.searchParams.set('state', vscodeState);
+          }
+
+          // Clean up stored VS Code parameters
+          delete (req.session as any).vscodeRedirectUri;
+          delete (req.session as any).vscodeState;
+
+          console.log('[OAuth] Final redirect URL:', redirectUrl.toString());
+          res.redirect(redirectUrl.toString());
+        } else {
+          // Show success page for browser-based authentication
+          const displayName = userContext.name || userContext.email || 'User';
+          res.send(this.getSuccessPageHTML(displayName));
+        }
       } catch (error) {
         console.error('[HTTP] Callback failed:', error);
         res.status(500).json({ error: 'Authentication callback failed' });
@@ -404,6 +448,180 @@ export class MCPHttpServer {
       }
     });
 
+    // OAuth Authorization Endpoint (standard location)
+    this.app.get('/authorize', (req, res) => {
+      // Log all query parameters for debugging
+      console.log('[OAuth] /authorize request query parameters:', req.query);
+
+      // Redirect to our auth/login endpoint, preserving all query parameters
+      const queryString = new URLSearchParams(req.query as any).toString();
+      const loginUrl = `/auth/login${queryString ? `?${queryString}` : ''}`;
+      console.log('[OAuth] Authorization request, redirecting to:', loginUrl);
+      res.redirect(loginUrl);
+    });
+
+    // OAuth Discovery Endpoints for MCP clients
+    // OpenID Connect Discovery
+    this.app.get('/.well-known/openid-configuration', (req, res) => {
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      res.json({
+        issuer: baseUrl,
+        authorization_endpoint: `${baseUrl}/authorize`,
+        token_endpoint: `${baseUrl}/auth/token`,
+        userinfo_endpoint: `${baseUrl}/auth/userinfo`,
+        jwks_uri: `${baseUrl}/.well-known/jwks.json`,
+        response_types_supported: ['code'],
+        grant_types_supported: ['authorization_code'],
+        subject_types_supported: ['public'],
+        id_token_signing_alg_values_supported: ['RS256'],
+        scopes_supported: ['openid', 'profile', 'email'],
+      });
+    });
+
+    // OAuth Protected Resource Discovery
+    this.app.get('/.well-known/oauth-protected-resource', (req, res) => {
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      res.json({
+        resource: `${baseUrl}/mcp`,
+        authorization_servers: [baseUrl],
+        bearer_methods_supported: ['header', 'body'],
+        resource_documentation: `${baseUrl}/docs`,
+      });
+    });
+
+    // OAuth Authorization Server Metadata
+    this.app.get('/.well-known/oauth-authorization-server', (req, res) => {
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      res.json({
+        issuer: baseUrl,
+        authorization_endpoint: `${baseUrl}/authorize`,
+        token_endpoint: `${baseUrl}/auth/token`,
+        response_types_supported: ['code'],
+        grant_types_supported: ['authorization_code'],
+        code_challenge_methods_supported: ['S256'],
+      });
+    });
+
+    // OAuth Token Endpoint (for MCP clients)
+    this.app.post('/auth/token', async (req, res) => {
+      try {
+        const { grant_type, code } = req.body;
+
+        // For device/client credentials flow, return error with login URL
+        if (!grant_type || grant_type !== 'authorization_code') {
+          res.status(400).json({
+            error: 'unsupported_grant_type',
+            error_description: 'Please use the browser-based authentication flow. Open the authorization URL in your browser.',
+            authorization_url: `${req.protocol}://${req.get('host')}/auth/login`,
+          });
+          return;
+        }
+
+        // Exchange authorization code for access token
+        // For simplicity, we treat the session token as the access token
+        const sessionId = (req.session as any).sessionId;
+        const sessionToken = (req.session as any).sessionToken;
+
+        if (!sessionId || !sessionToken) {
+          res.status(400).json({
+            error: 'invalid_grant',
+            error_description: 'Invalid or expired authorization code',
+          });
+          return;
+        }
+
+        // Return access token response
+        res.json({
+          access_token: sessionToken,
+          token_type: 'Bearer',
+          expires_in: 86400, // 24 hours
+          scope: 'openid profile email',
+        });
+      } catch (error) {
+        console.error('[OAuth] Token endpoint error:', error);
+        res.status(500).json({
+          error: 'server_error',
+          error_description: 'An error occurred processing the token request',
+        });
+      }
+    });
+
+    // Userinfo Endpoint (for MCP clients)
+    this.app.get('/auth/userinfo', this.requireAuth.bind(this), async (req, res) => {
+      try {
+        const userContext = (req as any).userContext || (req as any).mcpSession?.userContext;
+
+        if (!userContext) {
+          res.status(401).json({
+            error: 'unauthorized',
+            error_description: 'Valid authentication required',
+          });
+          return;
+        }
+
+        res.json({
+          sub: userContext.userId,
+          email: userContext.email,
+          name: userContext.name,
+          email_verified: true,
+        });
+      } catch (error) {
+        console.error('[OAuth] Userinfo endpoint error:', error);
+        res.status(500).json({
+          error: 'server_error',
+          error_description: 'An error occurred retrieving user information',
+        });
+      }
+    });
+
+    // MCP endpoint for HTTP transport using SSE
+    // Authentication is optional based on REQUIRE_MCP_AUTH environment variable
+    const mcpAuthMiddleware = process.env.REQUIRE_MCP_AUTH === 'true'
+      ? this.requireAuth.bind(this)
+      : (req: Request, res: Response, next: NextFunction) => next();
+
+    this.app.get('/mcp', mcpAuthMiddleware, async (req, res) => {
+      if (!this.mcpServer) {
+        res.status(503).json({
+          error: 'MCP server not initialized',
+          message: 'The MCP server has not been initialized yet. Please try again later.',
+        });
+        return;
+      }
+
+      try {
+        console.log('[HTTP] GET /mcp - Establishing SSE connection');
+        await (this.mcpServer as any).handleSSEConnection(req, res);
+      } catch (error) {
+        console.error('[HTTP] MCP SSE connection error:', error);
+        res.status(500).json({
+          error: 'Failed to establish MCP connection',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    });
+
+    this.app.post('/mcp', mcpAuthMiddleware, async (req, res) => {
+      if (!this.mcpServer) {
+        res.status(503).json({
+          error: 'MCP server not initialized',
+          message: 'The MCP server has not been initialized yet. Please try again later.',
+        });
+        return;
+      }
+
+      try {
+        console.log('[HTTP] POST /mcp - Handling message');
+        await (this.mcpServer as any).handleSSEMessage(req, res);
+      } catch (error) {
+        console.error('[HTTP] MCP message error:', error);
+        res.status(500).json({
+          error: 'MCP message failed',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    });
+
     // Simple login page
     this.app.get('/', (req, res) => {
       const sessionId = (req.session as any).sessionId;
@@ -418,10 +636,38 @@ export class MCPHttpServer {
   }
 
   /**
-   * Authentication middleware
+   * Authentication middleware - supports both session cookies and bearer tokens
    */
   private async requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      // Check for Bearer token first (for MCP clients)
+      const authHeader = req.get('authorization');
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+
+        try {
+          // Validate bearer token (it's actually a session token)
+          const sessions = await this.sessionManager.getUserSessions('bearer-token');
+          const validSession = sessions.find((s: any) => s.sessionToken === token);
+
+          if (validSession) {
+            // Store user context in request for later use
+            (req as any).userContext = validSession.userContext;
+            return next();
+          }
+        } catch (error) {
+          console.error('[Auth] Bearer token validation error:', error);
+        }
+
+        res.status(401).json({
+          error: 'Invalid token',
+          message: 'The provided bearer token is invalid or expired.',
+          code: 'INVALID_BEARER_TOKEN'
+        });
+        return;
+      }
+
+      // Fall back to session cookie authentication
       const sessionId = (req.session as any).sessionId;
       const sessionToken = (req.session as any).sessionToken;
 
@@ -806,6 +1052,72 @@ export class MCPHttpServer {
   }
 
   /**
+   * Generate VS Code authentication complete page
+   * This page signals to VS Code that auth is complete and can close the window
+   */
+  private getVSCodeAuthCompleteHTML(accessToken: string, state: string): string {
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Authentication Complete</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    .container {
+      text-align: center;
+      padding: 2rem;
+    }
+    .checkmark {
+      font-size: 4rem;
+      animation: scaleIn 0.5s ease;
+    }
+    @keyframes scaleIn {
+      from { transform: scale(0); }
+      to { transform: scale(1); }
+    }
+    h1 { margin: 1rem 0; }
+    p { opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="checkmark">✓</div>
+    <h1>Authentication Complete!</h1>
+    <p>You can close this window and return to VS Code.</p>
+    <p style="font-size: 0.9rem; margin-top: 2rem; opacity: 0.7;">This window will close automatically...</p>
+  </div>
+  <script>
+    // Try to close the window automatically
+    setTimeout(() => {
+      window.close();
+    }, 2000);
+
+    // Also try to send a message to the opener (VS Code)
+    if (window.opener) {
+      window.opener.postMessage({
+        type: 'oauth-callback',
+        access_token: '${accessToken}',
+        state: '${state}'
+      }, '*');
+    }
+  </script>
+</body>
+</html>
+`;
+  }
+
+  /**
    * Generate success page HTML after authentication
    */
   private getSuccessPageHTML(userName: string): string {
@@ -978,6 +1290,14 @@ export class MCPHttpServer {
   /**
    * Start the HTTP server
    */
+  /**
+   * Set MCP server instance for HTTP transport
+   */
+  setMCPServer(server: EnhancedMCPServer): void {
+    this.mcpServer = server;
+    console.log('[HTTP] MCP server instance connected');
+  }
+
   start(): void {
     this.app.listen(this.config.port, () => {
       console.log(`[HTTP] Server listening on port ${this.config.port}`);

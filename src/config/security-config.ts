@@ -2,6 +2,7 @@
  * Production security configuration
  */
 
+import { randomBytes } from 'crypto';
 import type { Request, Response, NextFunction } from 'express';
 
 /**
@@ -100,9 +101,10 @@ export const secureCookieConfig = {
 
 /**
  * Session configuration with enhanced security
+ * Automatically generates a secure random session secret if not provided
  */
 export const secureSessionConfig = {
-  secret: process.env.SESSION_SECRET || 'mcp-session-secret-change-in-production',
+  secret: process.env.SESSION_SECRET || randomBytes(32).toString('hex'),
   resave: false,
   saveUninitialized: false,
   rolling: true, // Reset expiration on each request
