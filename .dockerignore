@@ -1,0 +1,62 @@
+# Node modules (will be installed in container)
+node_modules
+npm-debug.log
+
+# Environment files (should be provided via Kubernetes secrets)
+.env
+.env.local
+.env.*.local
+
+# Build output (will be built in container)
+dist
+build
+*.tsbuildinfo
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Tests and test coverage
+coverage
+*.test.ts
+*.spec.ts
+__tests__
+test
+
+# Documentation
+*.md
+docs
+.github
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+
+# Task Master
+.taskmaster
+
+# Logs
+logs
+*.log
+
+# Session storage (will be created in container or external)
+.sessions
+
+# Temporary files
+tmp
+temp
+*.tmp
+
+# Lock files (package-lock.json is kept for reproducible builds)
+# yarn.lock
+# pnpm-lock.yaml

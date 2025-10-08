@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "containerAppName": {
+      "value": "copilot-mcp"
+    },
+    "location": {
+      "value": "eastus"
+    },
+    "environment": {
+      "value": "production"
+    },
+    "imageTag": {
+      "value": "latest"
+    },
+    "containerRegistryName": {
+      "value": "your-acr-name"
+    },
+    "keyVaultName": {
+      "value": "your-keyvault-name"
+    },
+    "redisCacheName": {
+      "value": "your-redis-cache-name"
+    },
+    "minReplicas": {
+      "value": 1
+    },
+    "maxReplicas": {
+      "value": 10
+    },
+    "cpu": {
+      "value": "0.5"
+    },
+    "memory": {
+      "value": "1.0Gi"
+    },
+    "enableIngress": {
+      "value": true
+    },
+    "targetPort": {
+      "value": 3000
+    }
+  }
+}

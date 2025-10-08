@@ -12,6 +12,18 @@ export enum CircuitState {
 }
 
 /**
+ * Failure classification for circuit breaker
+ */
+export enum FailureType {
+  NETWORK = 'NETWORK', // Network connectivity issues
+  TIMEOUT = 'TIMEOUT', // Request timeouts
+  SERVER_ERROR = 'SERVER_ERROR', // 5xx server errors
+  AUTH_SERVICE = 'AUTH_SERVICE', // OAuth/Authentication service failures
+  RATE_LIMIT = 'RATE_LIMIT', // Rate limiting
+  UNKNOWN = 'UNKNOWN', // Unknown or unclassified
+}
+
+/**
  * Circuit breaker configuration
  */
 export interface CircuitBreakerConfig {
@@ -19,6 +31,7 @@ export interface CircuitBreakerConfig {
   failureWindow: number; // Time window for counting failures (ms)
   recoveryTimeout: number; // Time to wait before attempting recovery (ms)
   successThreshold: number; // Successes needed in half-open to close circuit
+  excludedFailureTypes?: FailureType[]; // Failure types that don't count toward threshold
 }
 
 /**
@@ -37,9 +50,14 @@ export interface CircuitBreakerMetrics {
  * Circuit Breaker error
  */
 export class CircuitBreakerError extends Error {
-  constructor(message: string) {
+  public readonly state: CircuitState;
+  public readonly metrics?: CircuitBreakerMetrics;
+
+  constructor(message: string, state?: CircuitState, metrics?: CircuitBreakerMetrics) {
     super(message);
     this.name = 'CircuitBreakerError';
+    this.state = state || CircuitState.OPEN;
+    this.metrics = metrics;
   }
 }
 
@@ -73,6 +91,85 @@ export class CircuitBreaker {
   }
 
   /**
+   * Classify an error to determine its failure type
+   * @param error - Error to classify
+   * @returns Failure type
+   */
+  private classifyFailure(error: unknown): FailureType {
+    if (!(error instanceof Error)) {
+      return FailureType.UNKNOWN;
+    }
+
+    // Check error name first
+    if (error.name === 'OAuthError' || error.name === 'AuthenticationError') {
+      return FailureType.AUTH_SERVICE;
+    }
+
+    if (error.name === 'NetworkError') {
+      return FailureType.NETWORK;
+    }
+
+    if (error.name === 'TimeoutError') {
+      return FailureType.TIMEOUT;
+    }
+
+    if (error.name === 'RateLimitError') {
+      return FailureType.RATE_LIMIT;
+    }
+
+    // Check HTTP status codes
+    if ('status' in error && typeof error.status === 'number') {
+      const status = error.status;
+
+      if (status === 429) {
+        return FailureType.RATE_LIMIT;
+      }
+
+      if (status >= 500) {
+        return FailureType.SERVER_ERROR;
+      }
+
+      // OAuth/Auth service errors (401, 403)
+      if (status === 401 || status === 403) {
+        return FailureType.AUTH_SERVICE;
+      }
+    }
+
+    // Check error message for common patterns
+    if (
+      error.message.includes('ECONNRESET') ||
+      error.message.includes('ETIMEDOUT') ||
+      error.message.includes('ECONNREFUSED') ||
+      error.message.includes('network')
+    ) {
+      return FailureType.NETWORK;
+    }
+
+    if (error.message.includes('timeout')) {
+      return FailureType.TIMEOUT;
+    }
+
+    if (error.message.includes('oauth') || error.message.includes('token')) {
+      return FailureType.AUTH_SERVICE;
+    }
+
+    return FailureType.UNKNOWN;
+  }
+
+  /**
+   * Check if failure should count toward circuit breaker threshold
+   * @param failureType - Type of failure
+   * @returns True if failure should count
+   */
+  private shouldCountFailure(failureType: FailureType): boolean {
+    if (!this.config.excludedFailureTypes) {
+      return true;
+    }
+
+    return !this.config.excludedFailureTypes.includes(failureType);
+  }
+
+  /**
    * Execute a function with circuit breaker protection
    * @param fn - Function to execute
    * @returns Result of the function
@@ -84,7 +181,11 @@ export class CircuitBreaker {
     // If circuit is open, fail fast
     if (this.state === CircuitState.OPEN) {
       this.rejectionCount++;
-      throw new CircuitBreakerError('Circuit breaker is OPEN - failing fast');
+      throw new CircuitBreakerError(
+        'Circuit breaker is OPEN - failing fast',
+        this.state,
+        this.getMetrics()
+      );
     }
 
     try {
@@ -92,7 +193,8 @@ export class CircuitBreaker {
       this.onSuccess();
       return result;
     } catch (error) {
-      this.onFailure();
+      const failureType = this.classifyFailure(error);
+      this.onFailure(failureType);
       throw error;
     }
   }
@@ -120,30 +222,39 @@ export class CircuitBreaker {
 
   /**
    * Handle failed execution
+   * @param failureType - Type of failure that occurred
    */
-  private onFailure(): void {
+  private onFailure(failureType: FailureType = FailureType.UNKNOWN): void {
     const now = Date.now();
     this.lastFailureTime = now;
-    this.failureTimestamps.push(now);
 
-    // Remove old failure timestamps outside the window
-    this.failureTimestamps = this.failureTimestamps.filter(
-      (timestamp) => now - timestamp < this.config.failureWindow
-    );
+    // Only count failures that should affect circuit breaker
+    if (this.shouldCountFailure(failureType)) {
+      this.failureTimestamps.push(now);
 
-    this.failureCount = this.failureTimestamps.length;
+      // Remove old failure timestamps outside the window
+      this.failureTimestamps = this.failureTimestamps.filter(
+        (timestamp) => now - timestamp < this.config.failureWindow
+      );
 
-    console.log(
-      `[CircuitBreaker] Failure recorded (${this.failureCount}/${this.config.failureThreshold} in window)`
-    );
+      this.failureCount = this.failureTimestamps.length;
 
-    // If we've exceeded the threshold, open the circuit
-    if (this.state === CircuitState.CLOSED && this.failureCount >= this.config.failureThreshold) {
-      this.transitionTo(CircuitState.OPEN);
-    } else if (this.state === CircuitState.HALF_OPEN) {
-      // Any failure in half-open state reopens the circuit
-      this.transitionTo(CircuitState.OPEN);
-      this.successCount = 0;
+      console.log(
+        `[CircuitBreaker] Failure recorded (type: ${failureType}, ${this.failureCount}/${this.config.failureThreshold} in window)`
+      );
+
+      // If we've exceeded the threshold, open the circuit
+      if (this.state === CircuitState.CLOSED && this.failureCount >= this.config.failureThreshold) {
+        this.transitionTo(CircuitState.OPEN);
+      } else if (this.state === CircuitState.HALF_OPEN) {
+        // Any failure in half-open state reopens the circuit
+        this.transitionTo(CircuitState.OPEN);
+        this.successCount = 0;
+      }
+    } else {
+      console.log(
+        `[CircuitBreaker] Failure excluded from count (type: ${failureType})`
+      );
     }
   }
 

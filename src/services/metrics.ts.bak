@@ -1,0 +1,423 @@
+/**
+ * Prometheus-compatible metrics service
+ * Tracks application metrics for monitoring and alerting
+ */
+
+/**
+ * Metric type
+ */
+export type MetricType = 'counter' | 'gauge' | 'histogram' | 'summary';
+
+/**
+ * Metric value
+ */
+interface MetricValue {
+  value: number;
+  labels?: Record<string, string>;
+  timestamp: number;
+}
+
+/**
+ * Histogram bucket
+ */
+interface HistogramBucket {
+  le: number; // Less than or equal to
+  count: number;
+}
+
+/**
+ * Metric definition
+ */
+interface Metric {
+  name: string;
+  type: MetricType;
+  help: string;
+  values: Map<string, MetricValue>;
+  buckets?: HistogramBucket[]; // For histograms
+}
+
+/**
+ * Metrics Service
+ * Collects and exposes Prometheus-compatible metrics
+ */
+export class MetricsService {
+  private metrics: Map<string, Metric> = new Map();
+
+  /**
+   * Register a counter metric
+   */
+  registerCounter(name: string, help: string): void {
+    this.metrics.set(name, {
+      name,
+      type: 'counter',
+      help,
+      values: new Map(),
+    });
+  }
+
+  /**
+   * Register a gauge metric
+   */
+  registerGauge(name: string, help: string): void {
+    this.metrics.set(name, {
+      name,
+      type: 'gauge',
+      help,
+      values: new Map(),
+    });
+  }
+
+  /**
+   * Register a histogram metric
+   */
+  registerHistogram(name: string, help: string, buckets: number[] = [0.1, 0.5, 1, 2, 5, 10]): void {
+    this.metrics.set(name, {
+      name,
+      type: 'histogram',
+      help,
+      values: new Map(),
+      buckets: buckets.map((le) => ({ le, count: 0 })),
+    });
+  }
+
+  /**
+   * Increment a counter
+   */
+  incrementCounter(name: string, labels?: Record<string, string>, value: number = 1): void {
+    const metric = this.metrics.get(name);
+    if (!metric || metric.type !== 'counter') {
+      console.warn(`[Metrics] Counter ${name} not found or wrong type`);
+      return;
+    }
+
+    const key = this.getMetricKey(labels);
+    const existing = metric.values.get(key);
+
+    metric.values.set(key, {
+      value: (existing?.value || 0) + value,
+      labels,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Set a gauge value
+   */
+  setGauge(name: string, value: number, labels?: Record<string, string>): void {
+    const metric = this.metrics.get(name);
+    if (!metric || metric.type !== 'gauge') {
+      console.warn(`[Metrics] Gauge ${name} not found or wrong type`);
+      return;
+    }
+
+    const key = this.getMetricKey(labels);
+    metric.values.set(key, {
+      value,
+      labels,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Increment a gauge
+   */
+  incrementGauge(name: string, labels?: Record<string, string>, delta: number = 1): void {
+    const metric = this.metrics.get(name);
+    if (!metric || metric.type !== 'gauge') {
+      console.warn(`[Metrics] Gauge ${name} not found or wrong type`);
+      return;
+    }
+
+    const key = this.getMetricKey(labels);
+    const existing = metric.values.get(key);
+
+    metric.values.set(key, {
+      value: (existing?.value || 0) + delta,
+      labels,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Observe a histogram value
+   */
+  observeHistogram(name: string, value: number, labels?: Record<string, string>): void {
+    const metric = this.metrics.get(name);
+    if (!metric || metric.type !== 'histogram' || !metric.buckets) {
+      console.warn(`[Metrics] Histogram ${name} not found or wrong type`);
+      return;
+    }
+
+    // Increment bucket counts
+    for (const bucket of metric.buckets) {
+      if (value <= bucket.le) {
+        bucket.count++;
+      }
+    }
+
+    // Store value
+    const key = this.getMetricKey(labels);
+    const existing = metric.values.get(key);
+
+    metric.values.set(key, {
+      value: (existing?.value || 0) + value,
+      labels,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Get metric value
+   */
+  getMetricValue(name: string, labels?: Record<string, string>): number | undefined {
+    const metric = this.metrics.get(name);
+    if (!metric) {
+      return undefined;
+    }
+
+    const key = this.getMetricKey(labels);
+    return metric.values.get(key)?.value;
+  }
+
+  /**
+   * Export metrics in Prometheus format
+   */
+  export(): string {
+    const lines: string[] = [];
+
+    for (const metric of this.metrics.values()) {
+      // Add HELP comment
+      lines.push(`# HELP ${metric.name} ${metric.help}`);
+
+      // Add TYPE comment
+      lines.push(`# TYPE ${metric.name} ${metric.type}`);
+
+      // Add values
+      for (const [key, value] of metric.values) {
+        const labelsStr = value.labels ? this.formatLabels(value.labels) : '';
+        lines.push(`${metric.name}${labelsStr} ${value.value}`);
+      }
+
+      // Add histogram buckets
+      if (metric.type === 'histogram' && metric.buckets) {
+        for (const bucket of metric.buckets) {
+          lines.push(`${metric.name}_bucket{le="${bucket.le}"} ${bucket.count}`);
+        }
+        lines.push(`${metric.name}_bucket{le="+Inf"} ${metric.buckets[metric.buckets.length - 1].count}`);
+      }
+
+      lines.push(''); // Empty line between metrics
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Reset all metrics
+   */
+  reset(): void {
+    for (const metric of this.metrics.values()) {
+      metric.values.clear();
+      if (metric.buckets) {
+        for (const bucket of metric.buckets) {
+          bucket.count = 0;
+        }
+      }
+    }
+  }
+
+  /**
+   * Get metric key from labels
+   */
+  private getMetricKey(labels?: Record<string, string>): string {
+    if (!labels || Object.keys(labels).length === 0) {
+      return 'default';
+    }
+
+    return Object.entries(labels)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}:${v}`)
+      .join(',');
+  }
+
+  /**
+   * Format labels for Prometheus
+   */
+  private formatLabels(labels: Record<string, string>): string {
+    const formatted = Object.entries(labels)
+      .map(([k, v]) => `${k}="${v}"`)
+      .join(',');
+
+    return `{${formatted}}`;
+  }
+}
+
+/**
+ * Application-specific metrics
+ */
+export class ApplicationMetrics {
+  private metrics: MetricsService;
+
+  constructor(metrics: MetricsService) {
+    this.metrics = metrics;
+    this.registerMetrics();
+  }
+
+  /**
+   * Register all application metrics
+   */
+  private registerMetrics(): void {
+    // HTTP metrics
+    this.metrics.registerCounter('http_requests_total', 'Total HTTP requests');
+    this.metrics.registerHistogram('http_request_duration_seconds', 'HTTP request duration in seconds', [
+      0.005,
+      0.01,
+      0.025,
+      0.05,
+      0.1,
+      0.25,
+      0.5,
+      1,
+      2.5,
+      5,
+      10,
+    ]);
+    this.metrics.registerGauge('http_requests_in_flight', 'Current HTTP requests in flight');
+
+    // OAuth metrics
+    this.metrics.registerCounter('oauth_authentications_total', 'Total OAuth authentications');
+    this.metrics.registerCounter('oauth_failures_total', 'Total OAuth authentication failures');
+    this.metrics.registerHistogram('oauth_duration_seconds', 'OAuth authentication duration in seconds');
+
+    // Session metrics
+    this.metrics.registerGauge('active_sessions', 'Number of active sessions');
+    this.metrics.registerCounter('session_created_total', 'Total sessions created');
+    this.metrics.registerCounter('session_expired_total', 'Total sessions expired');
+
+    // Direct Line metrics
+    this.metrics.registerCounter('directline_messages_sent_total', 'Total messages sent to Direct Line');
+    this.metrics.registerCounter('directline_messages_received_total', 'Total messages received from Direct Line');
+    this.metrics.registerCounter('directline_errors_total', 'Total Direct Line errors');
+
+    // Key Vault metrics
+    this.metrics.registerCounter('keyvault_operations_total', 'Total Key Vault operations');
+    this.metrics.registerHistogram('keyvault_operation_duration_seconds', 'Key Vault operation duration');
+    this.metrics.registerGauge('keyvault_cache_size', 'Key Vault cache size');
+
+    // Redis metrics
+    this.metrics.registerCounter('redis_operations_total', 'Total Redis operations');
+    this.metrics.registerCounter('redis_errors_total', 'Total Redis errors');
+    this.metrics.registerHistogram('redis_operation_duration_seconds', 'Redis operation duration');
+
+    // Security metrics
+    this.metrics.registerCounter('security_incidents_total', 'Total security incidents');
+    this.metrics.registerCounter('rate_limit_exceeded_total', 'Total rate limit violations');
+    this.metrics.registerGauge('blocked_ips', 'Number of blocked IP addresses');
+  }
+
+  /**
+   * Record HTTP request
+   */
+  recordHttpRequest(method: string, path: string, statusCode: number, duration: number): void {
+    this.metrics.incrementCounter('http_requests_total', {
+      method,
+      path,
+      status: statusCode.toString(),
+    });
+    this.metrics.observeHistogram('http_request_duration_seconds', duration / 1000, {
+      method,
+      path,
+    });
+  }
+
+  /**
+   * Record OAuth authentication
+   */
+  recordOAuthAuthentication(success: boolean, duration: number): void {
+    if (success) {
+      this.metrics.incrementCounter('oauth_authentications_total', { result: 'success' });
+    } else {
+      this.metrics.incrementCounter('oauth_failures_total', { result: 'failure' });
+    }
+    this.metrics.observeHistogram('oauth_duration_seconds', duration / 1000);
+  }
+
+  /**
+   * Record session event
+   */
+  recordSessionEvent(event: 'created' | 'expired', count: number = 1): void {
+    if (event === 'created') {
+      this.metrics.incrementCounter('session_created_total', undefined, count);
+    } else {
+      this.metrics.incrementCounter('session_expired_total', undefined, count);
+    }
+  }
+
+  /**
+   * Update active sessions count
+   */
+  updateActiveSessions(count: number): void {
+    this.metrics.setGauge('active_sessions', count);
+  }
+
+  /**
+   * Record Direct Line message
+   */
+  recordDirectLineMessage(direction: 'sent' | 'received'): void {
+    if (direction === 'sent') {
+      this.metrics.incrementCounter('directline_messages_sent_total');
+    } else {
+      this.metrics.incrementCounter('directline_messages_received_total');
+    }
+  }
+
+  /**
+   * Record security incident
+   */
+  recordSecurityIncident(type: string): void {
+    this.metrics.incrementCounter('security_incidents_total', { type });
+  }
+
+  /**
+   * Export metrics
+   */
+  export(): string {
+    return this.metrics.export();
+  }
+}
+
+/**
+ * Create metrics service
+ */
+export function createMetricsService(): MetricsService {
+  return new MetricsService();
+}
+
+/**
+ * Create application metrics
+ */
+export function createApplicationMetrics(): ApplicationMetrics {
+  return new ApplicationMetrics(createMetricsService());
+}
+
+/**
+ * Singleton metrics instance
+ */
+let defaultMetrics: ApplicationMetrics | null = null;
+
+/**
+ * Get or create default metrics instance
+ */
+export function getMetrics(): ApplicationMetrics {
+  if (!defaultMetrics) {
+    defaultMetrics = createApplicationMetrics();
+  }
+  return defaultMetrics;
+}
+
+/**
+ * Reset metrics
+ */
+export function resetMetrics(): void {
+  defaultMetrics = null;
+}

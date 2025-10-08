@@ -4,7 +4,12 @@
 
 import { config as loadDotenv } from 'dotenv';
 import { z } from 'zod';
-import { envSchema, type EnvConfig } from './env.schema.js';
+import { envSchema, type EnvConfig as EnvConfigType } from './env.schema.js';
+
+/**
+ * Re-export EnvConfig type
+ */
+export type EnvConfig = EnvConfigType;
 
 /**
  * Environment validation error
