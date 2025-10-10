@@ -174,191 +174,21 @@ npm run build          # Rebuild
 
 ## Configuration Examples
 
-### Stdio Mode (Default)
+For detailed configuration options including stdio and HTTP mode setup, environment variables, and VS Code mcp.json examples, see the [Configuration Guide](./CONFIGURATION.md).
 
-**.env**:
-```bash
-DIRECT_LINE_SECRET=your-secret
-MCP_TRANSPORT_MODE=stdio
-LOG_LEVEL=debug
-NODE_ENV=development
-```
+Quick reminder:
+- **Stdio mode**: Best for local development, uses `.env` file or inline env vars in mcp.json
+- **HTTP mode**: For production/remote deployment, requires OAuth setup
 
-**.vscode/mcp.json**:
-```json
-{
-  "servers": {
-    "copilot-studio-local": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["dist/index.js"]
-    }
-  }
-}
-```
+See also:
+- [Authentication Guide](./AUTHENTICATION.md) for OAuth configuration
+- [Getting Started Guide](./GETTING_STARTED.md) for basic VS Code setup
 
-### HTTP Mode with OAuth
-Generate a secret for the **SESSION_SECRET** variable: 
-```bash
- node -e "console.log(require('crypto').randomBytes(32)
-  .toString('hex'))"
-```
+## MCP Tools Reference
 
-**.env**:
-```bash
-DIRECT_LINE_SECRET=your-secret
-MCP_TRANSPORT_MODE=http
-HTTP_PORT=3000
-SESSION_SECRET=your-32-char-secret
-LOG_LEVEL=debug
+The server provides 4 MCP tools: `start_conversation`, `send_message`, `get_conversation_history`, and `end_conversation`.
 
-# Azure Entra ID (optional)
-ENTRA_TENANT_ID=your-tenant-id
-ENTRA_CLIENT_ID=your-client-id
-ENTRA_CLIENT_SECRET=your-client-secret
-ENTRA_REDIRECT_URI=http://localhost:3000/auth/callback
-```
-
-**Run**:
-```bash
-npm run dev
-```
-
-**.vscode/mcp.json** (VS Code HTTP MCP Integration):
-```json
-{
-  "servers": {
-    "copilot-studio-http": {
-      "type": "http",
-      "url": "http://localhost:3000/mcp"
-    }
-  }
-}
-```
-
-**Note**: For HTTP transport, the server must be started separately (`npm start` or `npm run dev`). The VS Code MCP extension will connect to the running HTTP server instead of launching it via stdio.
-
-## Available MCP Tools
-
-The server provides 4 MCP tools for interacting with your Copilot Studio Agent via Direct Line:
-
-### 1. start_conversation
-Start a new conversation with the Copilot Studio Agent.
-
-**Parameters**:
-- `initialMessage` (string, optional): First message to send
-
-**Example**:
-```json
-{
-  "name": "start_conversation",
-  "arguments": {
-    "initialMessage": "Hello, I need help with my order"
-  }
-}
-```
-
-**Returns**:
-```json
-{
-  "conversationId": "ABC123...",
-  "status": "started",
-  "response": "Hello! I'd be happy to help...",
-  "activityId": "ABC123|0000000"
-}
-```
-
-### 2. send_message
-Send a message to an existing conversation.
-
-**Parameters**:
-- `message` (string, required): The message text to send
-- `conversationId` (string, optional): Conversation ID to continue (creates new if omitted)
-
-**Example**:
-```json
-{
-  "name": "send_message",
-  "arguments": {
-    "message": "What's my order status?",
-    "conversationId": "ABC123..."
-  }
-}
-```
-
-**Returns**:
-```json
-{
-  "conversationId": "ABC123...",
-  "response": "Let me check that for you...",
-  "activityId": "ABC123|0000002"
-}
-```
-
-### 3. get_conversation_history
-Retrieve message history for a conversation.
-
-**Parameters**:
-- `conversationId` (string, required): Conversation ID
-- `limit` (number, optional): Maximum number of messages to return
-
-**Example**:
-```json
-{
-  "name": "get_conversation_history",
-  "arguments": {
-    "conversationId": "ABC123...",
-    "limit": 10
-  }
-}
-```
-
-**Returns**:
-```json
-{
-  "conversationId": "ABC123...",
-  "messageCount": 2,
-  "totalMessages": 2,
-  "messages": [
-    {
-      "id": "ABC123|0000001",
-      "type": "message",
-      "timestamp": "2025-10-10T20:01:46Z",
-      "from": {
-        "id": "bot-id",
-        "name": "Your Agent Name",
-        "role": "bot"
-      },
-      "text": "Hello! How can I help?"
-    }
-  ]
-}
-```
-
-### 4. end_conversation
-End an existing conversation and clean up resources.
-
-**Parameters**:
-- `conversationId` (string, required): Conversation ID to terminate
-
-**Example**:
-```json
-{
-  "name": "end_conversation",
-  "arguments": {
-    "conversationId": "ABC123..."
-  }
-}
-```
-
-**Returns**:
-```json
-{
-  "conversationId": "ABC123...",
-  "status": "ended",
-  "messageCount": 2
-}
-```
+For detailed tool documentation including parameters, examples, and usage patterns, see the [Usage Guide](./USAGE_GUIDE.md).
 
 ## Testing Your Changes
 
@@ -600,22 +430,11 @@ npm run format          # Format code with Prettier
 npm run build && node --inspect dist/index.js  # Debug built code
 ```
 
-## Environment Variables Quick Reference
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DIRECT_LINE_SECRET` | - | **Required** - Direct Line API secret |
-| `MCP_TRANSPORT_MODE` | `stdio` | Transport: `stdio` or `http` |
-| `LOG_LEVEL` | `info` | Logging: `debug`, `info`, `warn`, `error` |
-| `NODE_ENV` | `development` | Environment mode |
-| `HTTP_PORT` | `3000` | Port for HTTP mode |
-| `TOKEN_REFRESH_INTERVAL` | `1800000` | Token refresh (30 min) |
-
 ## Next Steps
 
 ✅ **Development working?** See [Testing Guide](./SETUP_AND_DEPLOYMENT.md#testing)
 ✅ **Ready to deploy?** See [Deployment Options](./SETUP_AND_DEPLOYMENT.md#deployment-options)
-✅ **Need OAuth?** See [Azure Entra ID Setup](./ENTRA_ID_SETUP.md)
+✅ **Need OAuth?** See [Authentication Guide](./AUTHENTICATION.md)
 ✅ **Understanding errors?** See [Error Handling Guide](./ERROR_HANDLING.md)
 
 ## Support

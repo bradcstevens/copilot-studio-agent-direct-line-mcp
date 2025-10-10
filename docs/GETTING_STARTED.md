@@ -170,7 +170,6 @@ Once installed, try these prompts in GitHub Copilot Chat:
 
 ## Additional Resources
 
-- **Authentication**: See [Authentication Modes Guide](./AUTHENTICATION_MODES.md) for stdio vs HTTP mode authentication
-- **Azure Entra ID**: Check [Azure Entra ID Setup Guide](./ENTRA_ID_SETUP.md) for OAuth configuration
+- **Authentication**: See [Authentication Guide](./AUTHENTICATION.md) for authentication modes and OAuth configuration
 - **Architecture**: Review [Architecture Documentation](./ARCHITECTURE.md) to understand the system design
 - **Error Handling**: Learn about error handling in the [Error Handling Guide](./ERROR_HANDLING.md)

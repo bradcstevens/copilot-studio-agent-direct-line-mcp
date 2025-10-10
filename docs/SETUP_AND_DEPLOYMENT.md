@@ -325,64 +325,17 @@ To test HTTP mode locally:
 
 ## Configuration
 
-### Environment Variables
+For detailed configuration options including environment variables, transport modes, and deployment settings, see the [Configuration Guide](./CONFIGURATION.md).
 
-#### Required Variables
+Quick reference for essential variables:
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `DIRECT_LINE_SECRET` | Direct Line API secret from Azure | `abc123...` |
+- **DIRECT_LINE_SECRET** (required): Your Direct Line secret from Copilot Studio
+- **MCP_TRANSPORT_MODE**: `stdio` (local) or `http` (production)
+- **LOG_LEVEL**: `debug`, `info`, `warn`, or `error`
 
-#### Optional Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NODE_ENV` | `development` | Environment: `development`, `staging`, `production` |
-| `LOG_LEVEL` | `info` | Logging verbosity: `debug`, `info`, `warn`, `error` |
-| `TOKEN_REFRESH_INTERVAL` | `1800000` | Token refresh interval in milliseconds (30 min) |
-| `MCP_TRANSPORT_MODE` | `stdio` | Transport mode: `stdio` or `http` |
-| `MCP_SERVER_PORT` | auto | Port for MCP server (stdio mode uses stdin/stdout) |
-
-#### HTTP Mode Variables (Optional)
-
-Required only if `MCP_TRANSPORT_MODE=http`:
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `ENTRA_TENANT_ID` | Azure Entra ID tenant ID | `12345678-1234-...` |
-| `ENTRA_CLIENT_ID` | Application (client) ID | `87654321-4321-...` |
-| `ENTRA_CLIENT_SECRET` | Client secret value | `abc~DEF123...` |
-| `ENTRA_REDIRECT_URI` | OAuth callback URL | `http://localhost:3000/auth/callback` |
-| `ENTRA_SCOPES` | OAuth scopes (comma-separated) | `openid,profile,email` |
-| `HTTP_PORT` | HTTP server port | `3000` |
-| `SESSION_SECRET` | Session encryption secret | `strong-random-secret` |
-| `ALLOWED_ORIGINS` | CORS allowed origins | `http://localhost:3000` |
-
-### Transport Modes
-
-#### STDIO Mode (Default)
-
-- Used for local development with MCP clients
-- Communicates over stdin/stdout
-- No authentication required
-- Best for: VS Code, local testing
-
-```bash
-MCP_TRANSPORT_MODE=stdio
-```
-
-#### HTTP Mode
-
-- Used for production deployments
-- RESTful API endpoints
-- Supports OAuth authentication
-- Best for: Web applications, remote clients
-
-```bash
-MCP_TRANSPORT_MODE=http
-HTTP_PORT=3000
-# OAuth configuration required
-```
+For HTTP mode configuration including OAuth setup, see:
+- [Configuration Guide](./CONFIGURATION.md) - All environment variables
+- [Authentication Guide](./AUTHENTICATION.md) - OAuth and Azure Entra ID setup
 
 ## Running Locally
 
@@ -783,7 +736,7 @@ curl -H "Authorization: Bearer YOUR_SECRET" \
 - Ensure client secret hasn't expired
 - Grant admin consent if required
 
-See: `docs/ENTRA_ID_SETUP.md`
+See: [Authentication Guide](./AUTHENTICATION.md)
 
 #### 4. TypeScript compilation errors
 
@@ -853,7 +806,7 @@ Connect debugger:
 1. **Documentation**
    - `README.md` - Project overview
    - `docs/ERROR_HANDLING.md` - Error handling guide
-   - `docs/ENTRA_ID_SETUP.md` - OAuth setup
+   - `docs/AUTHENTICATION.md` - Authentication and OAuth setup
 
 2. **Logs**
    - Check application logs for errors
@@ -928,7 +881,7 @@ Before deploying to production:
 ## Next Steps
 
 1. **Complete Setup**
-   - Configure OAuth (see `docs/ENTRA_ID_SETUP.md`)
+   - Configure OAuth (see [Authentication Guide](./AUTHENTICATION.md))
    - Set up monitoring
    - Configure alerts
 

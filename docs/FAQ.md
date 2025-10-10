@@ -104,9 +104,8 @@ Yes, but you need to configure separate MCP server instances, each with its own 
 ### Can I deploy this as a shared service?
 
 Yes, use HTTP transport mode with Azure Entra ID OAuth authentication. See:
-- [Authentication Modes Guide](./AUTHENTICATION_MODES.md)
+- [Authentication Guide](./AUTHENTICATION.md)
 - [Setup and Deployment Guide](./SETUP_AND_DEPLOYMENT.md)
-- [Azure Entra ID Setup Guide](./ENTRA_ID_SETUP.md)
 
 ## Technical Questions
 

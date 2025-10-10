@@ -335,7 +335,7 @@ cp .env.production .env
 
 ## Next Steps
 
-- **Getting Started**: See [Getting Started Guide](./GETTINGSTARTED.md) for installation
-- **Azure Entra ID**: Review [Azure Entra ID Setup Guide](./ENTRA_ID_SETUP.md) for OAuth configuration
+- **Getting Started**: See [Getting Started Guide](./GETTING_STARTED.md) for installation
+- **Authentication**: Review [Authentication Guide](./AUTHENTICATION.md) for OAuth and Azure Entra ID configuration
 - **Deployment**: Check [Setup and Deployment Guide](./SETUP_AND_DEPLOYMENT.md) for production deployment
 - **Troubleshooting**: Visit [Troubleshooting Guide](./TROUBLESHOOTING.md) for configuration issues

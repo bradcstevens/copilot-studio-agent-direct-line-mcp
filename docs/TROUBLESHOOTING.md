@@ -288,145 +288,15 @@ This indicates a CSRF protection failure or expired auth flow:
 - Increase timeout configuration if needed
 - Implement retry logic with exponential backoff
 
-## VS Code MCP Configuration Guide
+## VS Code MCP Configuration
 
-The `.vscode/mcp.json` file configures how VS Code connects to MCP servers.
+For detailed VS Code `.vscode/mcp.json` configuration including stdio and HTTP transport setup with examples, see the [Getting Started Guide](./GETTING_STARTED.md).
 
-### Configuration File Location
-
-Create the file at: `.vscode/mcp.json` in your workspace root
-
-### Stdio Transport (Local Development)
-
-**Recommended: Using input prompts for secrets**
-
-```json
-{
-  "inputs": [
-    {
-      "id": "direct_line_secret",
-      "type": "promptString",
-      "description": "Direct Line secret key from your Copilot Studio Agent",
-      "password": true
-    }
-  ],
-  "servers": {
-    "copilot-studio-agent-direct-line-mcp": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "copilot-studio-agent-direct-line-mcp"],
-      "env": {
-        "DIRECT_LINE_SECRET": "${input:direct_line_secret}",
-        "LOG_LEVEL": "info",
-        "TOKEN_REFRESH_INTERVAL": "1800000"
-      }
-    }
-  }
-}
-```
-
-**Alternative: Hardcoded secret (not recommended for shared projects)**
-
-```json
-{
-  "servers": {
-    "copilot-studio-agent-direct-line-mcp": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "copilot-studio-agent-direct-line-mcp"],
-      "env": {
-        "DIRECT_LINE_SECRET": "your_secret_here"
-      }
-    }
-  }
-}
-```
-
-**Local development from source:**
-
-```json
-{
-  "servers": {
-    "copilot-studio-local": {
-      "type": "stdio",
-      "command": "node",
-      "args": ["/absolute/path/to/copilot-studio-agent-direct-line-mcp/dist/index.js"],
-      "env": {
-        "DIRECT_LINE_SECRET": "${input:direct_line_secret}"
-      }
-    }
-  }
-}
-```
-
-### HTTP Transport (Remote Server)
-
-**OAuth-enabled remote server:**
-
-```json
-{
-  "servers": {
-    "copilot-studio-production": {
-      "type": "http",
-      "url": "https://your-mcp-server.azurecontainerapps.io/mcp",
-      "auth": {
-        "type": "oauth2",
-        "authorizationUrl": "https://your-mcp-server.azurecontainerapps.io/authorize",
-        "tokenUrl": "https://your-mcp-server.azurecontainerapps.io/auth/token",
-        "clientId": "optional-client-id",
-        "scopes": ["openid", "profile", "email"]
-      }
-    }
-  }
-}
-```
-
-**Local HTTP server (for testing):**
-
-```json
-{
-  "servers": {
-    "copilot-studio-http-local": {
-      "type": "http",
-      "url": "http://localhost:3000/mcp",
-      "auth": {
-        "type": "oauth2",
-        "authorizationUrl": "http://localhost:3000/authorize",
-        "tokenUrl": "http://localhost:3000/auth/token"
-      }
-    }
-  }
-}
-```
-
-### Configuration Options
-
-**Server Configuration Fields:**
-- `type`: Transport mode (`stdio` or `http`)
-- `command`: Executable to run (stdio only)
-- `args`: Command-line arguments array
-- `env`: Environment variables object
-- `url`: Server endpoint URL (http only)
-- `auth`: Authentication configuration (http only)
-
-**Input Types:**
-- `promptString`: Text input (use `password: true` for secrets)
-- `promptNumber`: Numeric input
-- `promptBoolean`: Yes/no selection
-
-**Environment Variables:**
-- `DIRECT_LINE_SECRET`: Required - Your Direct Line secret key
-- `LOG_LEVEL`: Optional - `debug` | `info` | `warn` | `error` (default: `info`)
-- `TOKEN_REFRESH_INTERVAL`: Optional - Token refresh interval in milliseconds (default: `1800000`)
-- `NODE_ENV`: Optional - `development` | `production`
-
-**Best Practices:**
-- ✅ Use input prompts for secrets to avoid committing them
-- ✅ Name servers descriptively (e.g., `copilot-studio-dev`, `copilot-studio-prod`)
-- ✅ Use absolute paths when running from source
-- ✅ Set `password: true` on secret inputs to mask values
-- ❌ Don't commit secrets in hardcoded configurations
-- ❌ Don't share `.vscode/mcp.json` with hardcoded secrets
+Quick tips for troubleshooting configuration issues:
+- Ensure `.vscode/mcp.json` is in your workspace root
+- Use input prompts for secrets (avoid hardcoding in config files)
+- Verify paths are absolute when running from source
+- Check [Configuration Guide](./CONFIGURATION.md) for all environment variables
 
 ## Getting More Help
 
@@ -434,7 +304,7 @@ If you continue to experience issues:
 
 1. **Check Logs**: Enable debug logging to see detailed error messages
 2. **Review Documentation**:
-   - [Getting Started Guide](./GETTINGSTARTED.md)
+   - [Getting Started Guide](./GETTING_STARTED.md)
    - [Configuration Guide](./CONFIGURATION.md)
    - [Architecture Documentation](./ARCHITECTURE.md)
 3. **Report Issues**: File a bug report on GitHub with:
