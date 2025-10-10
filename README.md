@@ -161,4 +161,5 @@ Licensed under the [MIT License](./LICENSE.md).
 
 ---
 
-_This project is not affiliated with or endorsed by Microsoft Corporation._
+> **Disclaimer:** This is a personal project by Brad Stevens.  
+> It is not affiliated with or endorsed by Microsoft Corporation.
