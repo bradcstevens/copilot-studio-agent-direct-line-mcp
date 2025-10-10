@@ -17,7 +17,7 @@ import {
   ValidationError,
   ErrorCategory,
   ErrorSeverity,
-} from '../errors.js';
+} from '../../../src/types/errors.js';
 
 describe('ApplicationError', () => {
   it('should create error with default context', () => {

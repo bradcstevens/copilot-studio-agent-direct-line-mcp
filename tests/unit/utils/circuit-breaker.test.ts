@@ -2,7 +2,7 @@
  * Tests for Circuit Breaker implementation
  */
 
-import { CircuitBreaker, CircuitState, FailureType, CircuitBreakerError } from '../circuit-breaker.js';
+import { CircuitBreaker, CircuitState, FailureType, CircuitBreakerError } from '../../../src/utils/circuit-breaker.js';
 
 // Helper to wait for a specified time
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

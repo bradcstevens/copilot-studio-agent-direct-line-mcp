@@ -224,6 +224,142 @@ ENTRA_REDIRECT_URI=http://localhost:3000/auth/callback
 npm run dev
 ```
 
+**.vscode/mcp.json** (VS Code HTTP MCP Integration):
+```json
+{
+  "servers": {
+    "copilot-studio-http": {
+      "type": "http",
+      "url": "http://localhost:3000/mcp"
+    }
+  }
+}
+```
+
+**Note**: For HTTP transport, the server must be started separately (`npm start` or `npm run dev`). The VS Code MCP extension will connect to the running HTTP server instead of launching it via stdio.
+
+## Available MCP Tools
+
+The server provides 4 MCP tools for interacting with your Copilot Studio Agent via Direct Line:
+
+### 1. start_conversation
+Start a new conversation with the Copilot Studio Agent.
+
+**Parameters**:
+- `initialMessage` (string, optional): First message to send
+
+**Example**:
+```json
+{
+  "name": "start_conversation",
+  "arguments": {
+    "initialMessage": "Hello, I need help with my order"
+  }
+}
+```
+
+**Returns**:
+```json
+{
+  "conversationId": "ABC123...",
+  "status": "started",
+  "response": "Hello! I'd be happy to help...",
+  "activityId": "ABC123|0000000"
+}
+```
+
+### 2. send_message
+Send a message to an existing conversation.
+
+**Parameters**:
+- `message` (string, required): The message text to send
+- `conversationId` (string, optional): Conversation ID to continue (creates new if omitted)
+
+**Example**:
+```json
+{
+  "name": "send_message",
+  "arguments": {
+    "message": "What's my order status?",
+    "conversationId": "ABC123..."
+  }
+}
+```
+
+**Returns**:
+```json
+{
+  "conversationId": "ABC123...",
+  "response": "Let me check that for you...",
+  "activityId": "ABC123|0000002"
+}
+```
+
+### 3. get_conversation_history
+Retrieve message history for a conversation.
+
+**Parameters**:
+- `conversationId` (string, required): Conversation ID
+- `limit` (number, optional): Maximum number of messages to return
+
+**Example**:
+```json
+{
+  "name": "get_conversation_history",
+  "arguments": {
+    "conversationId": "ABC123...",
+    "limit": 10
+  }
+}
+```
+
+**Returns**:
+```json
+{
+  "conversationId": "ABC123...",
+  "messageCount": 2,
+  "totalMessages": 2,
+  "messages": [
+    {
+      "id": "ABC123|0000001",
+      "type": "message",
+      "timestamp": "2025-10-10T20:01:46Z",
+      "from": {
+        "id": "bot-id",
+        "name": "Your Agent Name",
+        "role": "bot"
+      },
+      "text": "Hello! How can I help?"
+    }
+  ]
+}
+```
+
+### 4. end_conversation
+End an existing conversation and clean up resources.
+
+**Parameters**:
+- `conversationId` (string, required): Conversation ID to terminate
+
+**Example**:
+```json
+{
+  "name": "end_conversation",
+  "arguments": {
+    "conversationId": "ABC123..."
+  }
+}
+```
+
+**Returns**:
+```json
+{
+  "conversationId": "ABC123...",
+  "status": "ended",
+  "messageCount": 2
+}
+```
+
 ## Testing Your Changes
 
 ### Unit Tests
@@ -315,6 +451,132 @@ lsof -i :3000
 # Kill process or change port
 HTTP_PORT=3001 npm run dev
 ```
+
+### MCP Connection Failures
+
+❌ **Problem**: VS Code MCP extension can't connect to server
+
+✅ **Solutions**:
+```bash
+# 1. Verify server is built and exists
+ls -la dist/index.js
+
+# 2. Check MCP configuration
+cat .vscode/mcp.json
+
+# 3. Test server manually
+node dist/index.js
+
+# 4. View MCP extension logs
+# VS Code > Output > Model Context Protocol
+
+# 5. Restart VS Code MCP extension
+# Command Palette > "Developer: Reload Window"
+```
+
+**Common MCP connection errors:**
+- `ENOENT: no such file or directory` - Run `npm run build` first
+- `MODULE_NOT_FOUND` - Run `npm install` to install dependencies
+- `Server process exited with code 1` - Check server logs in MCP Output panel
+- `Timeout waiting for server` - Server may be hanging, check for errors in code
+
+### OAuth Authentication Failures (HTTP Mode)
+
+❌ **Problem**: OAuth sign-in fails or redirects to error page
+
+✅ **Solutions**:
+```bash
+# 1. Verify Entra ID configuration
+echo $ENTRA_CLIENT_ID
+echo $ENTRA_TENANT_ID
+echo $ENTRA_REDIRECT_URI
+
+# 2. Check redirect URI matches exactly
+# Must be: http://localhost:3000/auth/callback
+# Or your deployed URL + /auth/callback
+
+# 3. Verify client secret is valid
+# Check Azure Portal > App Registration > Certificates & secrets
+
+# 4. Enable debug logging
+LOG_LEVEL=debug npm run dev
+
+# 5. Check browser console for errors
+# F12 in browser > Console tab
+```
+
+**Common OAuth errors:**
+- `AADSTS50011: Redirect URI mismatch` - Update `ENTRA_REDIRECT_URI` to match Azure Portal
+- `AADSTS70001: Application not found` - Verify `ENTRA_CLIENT_ID` and `ENTRA_TENANT_ID`
+- `AADSTS7000215: Invalid client secret` - Regenerate secret in Azure Portal
+- `AADSTS50020: User account from external provider` - Grant admin consent in Azure Portal
+
+### HTTP Transport Errors
+
+❌ **Problem**: HTTP mode fails to start or accept connections
+
+✅ **Solutions**:
+```bash
+# 1. Verify HTTP mode configuration
+cat .env | grep MCP_TRANSPORT_MODE
+# Should show: MCP_TRANSPORT_MODE=http
+
+# 2. Check required environment variables
+cat .env | grep -E "HTTP_PORT|SESSION_SECRET"
+
+# 3. Generate new SESSION_SECRET if needed
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# 4. Test HTTP server directly
+curl http://localhost:3000/health
+
+# 5. Check server logs for errors
+npm run dev 2>&1 | grep -i error
+```
+
+**Common HTTP transport errors:**
+- `SESSION_SECRET must be at least 32 characters` - Generate longer secret (see above)
+- `Port 3000 already in use` - Change `HTTP_PORT` or kill process using port
+- `CORS error in browser` - Add your origin to `ALLOWED_ORIGINS` in `.env`
+- `Cannot POST /mcp` - Ensure middleware is properly configured
+
+### MCP Extension Issues
+
+❌ **Problem**: VS Code MCP extension not working correctly
+
+✅ **Solutions**:
+
+1. **Verify MCP extension is installed:**
+   - VS Code > Extensions > Search "Model Context Protocol"
+   - Install if not present
+
+2. **Check MCP extension version:**
+   ```bash
+   # Command Palette > "Extensions: Show Installed Extensions"
+   # Look for "Model Context Protocol"
+   ```
+
+3. **Reload VS Code window:**
+   ```bash
+   # Command Palette > "Developer: Reload Window"
+   ```
+
+4. **Clear VS Code MCP cache:**
+   ```bash
+   # Close VS Code
+   rm -rf ~/.vscode/mcp-cache  # or equivalent on Windows
+   # Restart VS Code
+   ```
+
+5. **View MCP extension logs:**
+   - VS Code > Output > Select "Model Context Protocol" from dropdown
+   - Look for connection errors or configuration issues
+
+**Common MCP extension errors:**
+- `MCP server failed to start` - Check `.vscode/mcp.json` syntax
+- `No MCP servers configured` - Create `.vscode/mcp.json` file
+- `MCP tools not available in Copilot` - Enable Agent Mode in GitHub Copilot Chat
+- `Permission denied` - Ensure server command/script has execute permissions
 
 ## Quick Commands Reference
 

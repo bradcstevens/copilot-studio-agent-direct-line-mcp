@@ -11,8 +11,7 @@ import { randomBytes } from 'crypto';
 import type { EntraIDClient } from './entraid-client.js';
 import type { SessionManager } from './session-manager.js';
 import type { UserContext, TokenMetadata, SecurityTracking } from '../types/session.js';
-import type { EnhancedMCPServer } from '../server/mcp-server-enhanced.js';
-import { SSEService } from './sse-service.js';
+import type { EnhancedMCPServer } from '../server/mcp-server.js';
 
 /**
  * HTTP server configuration
@@ -30,14 +29,13 @@ export interface HttpServerConfig {
 const csrfTokens = new Map<string, { token: string; expiresAt: number }>();
 
 /**
- * MCP HTTP Server with OAuth authentication and SSE support
+ * MCP HTTP Server with OAuth authentication
  */
 export class MCPHttpServer {
   private app: Express;
   private config: HttpServerConfig;
   private entraidClient: EntraIDClient;
   private sessionManager: SessionManager;
-  private sseService: SSEService;
   private mcpServer: EnhancedMCPServer | null = null;
 
   /**
@@ -54,12 +52,6 @@ export class MCPHttpServer {
     this.config = config;
     this.entraidClient = entraidClient;
     this.sessionManager = sessionManager;
-    this.sseService = new SSEService({
-      heartbeatInterval: 30000, // 30 seconds
-      connectionTimeout: 120000, // 2 minutes
-      maxConnections: 1000,
-      maxConnectionsPerUser: 5,
-    });
     this.app = express();
 
     this.setupMiddleware();
@@ -404,50 +396,6 @@ export class MCPHttpServer {
       }
     });
 
-    // SSE stream endpoint (requires authentication)
-    this.app.get('/mcp/stream', this.requireAuth.bind(this), async (req, res) => {
-      try {
-        const sessionId = (req.session as any).sessionId;
-        const sessionToken = (req.session as any).sessionToken;
-
-        // Session is already validated by requireAuth middleware
-        const validation = await this.sessionManager.validateSession(
-          sessionId,
-          sessionToken,
-          req.ip || '',
-          req.get('user-agent') || ''
-        );
-
-        if (!validation.valid || !validation.session) {
-          return res.status(401).json({
-            error: 'Authentication required',
-            message: 'Please sign in at /auth/login to access MCP services'
-          });
-        }
-
-        const userId = validation.session.userContext.userId;
-
-        // Create SSE connection
-        const connectionId = this.sseService.createConnection(
-          res,
-          req.ip || '',
-          req.get('user-agent') || '',
-          userId
-        );
-
-        if (!connectionId) {
-          return res.status(503).json({ error: 'Service unavailable - too many connections' });
-        }
-
-        console.log(
-          `[HTTP] SSE connection established: ${connectionId} (user: ${userId})`
-        );
-      } catch (error) {
-        console.error('[HTTP] SSE connection failed:', error);
-        res.status(500).json({ error: 'Failed to establish SSE connection' });
-      }
-    });
-
     // OAuth Authorization Endpoint (standard location)
     this.app.get('/authorize', (req, res) => {
       // Log all query parameters for debugging
@@ -574,32 +522,11 @@ export class MCPHttpServer {
       }
     });
 
-    // MCP endpoint for HTTP transport using SSE
+    // MCP endpoint for HTTP transport
     // Authentication is optional based on REQUIRE_MCP_AUTH environment variable
     const mcpAuthMiddleware = process.env.REQUIRE_MCP_AUTH === 'true'
       ? this.requireAuth.bind(this)
       : (req: Request, res: Response, next: NextFunction) => next();
-
-    this.app.get('/mcp', mcpAuthMiddleware, async (req, res) => {
-      if (!this.mcpServer) {
-        res.status(503).json({
-          error: 'MCP server not initialized',
-          message: 'The MCP server has not been initialized yet. Please try again later.',
-        });
-        return;
-      }
-
-      try {
-        console.log('[HTTP] GET /mcp - Establishing SSE connection');
-        await (this.mcpServer as any).handleSSEConnection(req, res);
-      } catch (error) {
-        console.error('[HTTP] MCP SSE connection error:', error);
-        res.status(500).json({
-          error: 'Failed to establish MCP connection',
-          message: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-    });
 
     this.app.post('/mcp', mcpAuthMiddleware, async (req, res) => {
       if (!this.mcpServer) {
@@ -612,13 +539,17 @@ export class MCPHttpServer {
 
       try {
         console.log('[HTTP] POST /mcp - Handling message');
-        await (this.mcpServer as any).handleSSEMessage(req, res);
+        // Use new HTTP POST handler for direct JSON-RPC communication (VS Code compatible)
+        await (this.mcpServer as any).handleHttpMessage(req, res);
       } catch (error) {
         console.error('[HTTP] MCP message error:', error);
-        res.status(500).json({
-          error: 'MCP message failed',
-          message: error instanceof Error ? error.message : 'Unknown error',
-        });
+        // Only send error response if headers haven't been sent yet
+        if (!res.headersSent) {
+          res.status(500).json({
+            error: 'MCP message failed',
+            message: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
       }
     });
 
@@ -1026,8 +957,8 @@ export class MCPHttpServer {
       </li>
       <li>
         <div>
-          <div class="endpoint-path">GET /mcp/stream</div>
-          <div class="endpoint-desc">MCP Server-Sent Events stream (authenticated)</div>
+          <div class="endpoint-path">POST /mcp</div>
+          <div class="endpoint-desc">MCP HTTP transport endpoint</div>
         </div>
       </li>
       <li>
@@ -1312,17 +1243,9 @@ export class MCPHttpServer {
   }
 
   /**
-   * Get SSE service instance
-   */
-  getSSEService(): SSEService {
-    return this.sseService;
-  }
-
-  /**
    * Stop the HTTP server
    */
   stop(): void {
-    this.sseService.stop();
     console.log('[HTTP] Server stopped');
   }
 }

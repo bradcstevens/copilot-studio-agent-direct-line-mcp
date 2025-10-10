@@ -10,7 +10,7 @@ import { getEnv } from './config/env.js';
 import { DirectLineClient } from './services/directline-client.js';
 import { TokenManager } from './services/token-manager.js';
 import { ConversationManager } from './services/conversation-manager.js';
-import { EnhancedMCPServer, type TransportMode } from './server/mcp-server-enhanced.js';
+import { EnhancedMCPServer, type TransportMode } from './server/mcp-server.js';
 import { EntraIDClient } from './services/entraid-client.js';
 import { SessionManager } from './services/session-manager.js';
 import { MemorySessionStore } from './services/stores/memory-session-store.js';

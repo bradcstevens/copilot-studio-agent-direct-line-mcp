@@ -1,9 +1,10 @@
 /**
- * MCP Server implementation for Copilot Studio Direct Line integration
+ * Enhanced MCP Server with authentication support and HTTP transport
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -11,6 +12,9 @@ import {
 import type { DirectLineClient } from '../services/directline-client.js';
 import type { TokenManager } from '../services/token-manager.js';
 import type { ConversationManager } from '../services/conversation-manager.js';
+import type { UserContext } from '../types/session.js';
+import type { EntraIDClient } from '../services/entraid-client.js';
+import type { SessionManager } from '../services/session-manager.js';
 import {
   validateToolArgs,
   SendMessageArgsSchema,
@@ -21,35 +25,75 @@ import {
 import { createSuccessResponse, transformErrorToMCPResponse } from './mcp-response.js';
 
 /**
- * MCP Server for Copilot Studio Agent integration
+ * Transport mode
  */
-export class CopilotStudioMCPServer {
+export type TransportMode = 'stdio' | 'http';
+
+/**
+ * Enhanced MCP Server configuration
+ */
+export interface MCPServerConfig {
+  transportMode: TransportMode;
+  requireAuth?: boolean; // Only for HTTP mode
+  entraidClient?: EntraIDClient; // OAuth client for HTTP mode
+  sessionManager?: SessionManager; // Session manager for HTTP mode
+}
+
+/**
+ * User-conversation mapping for isolation
+ */
+interface UserConversationMapping {
+  userId: string;
+  conversationIds: Set<string>;
+}
+
+/**
+ * Audit log entry
+ */
+interface AuditLogEntry {
+  timestamp: number;
+  userId?: string;
+  action: string;
+  conversationId?: string;
+  details?: Record<string, unknown>;
+}
+
+/**
+ * Enhanced MCP Server for Copilot Studio with authentication support
+ */
+export class EnhancedMCPServer {
   private server: Server;
   private client: DirectLineClient;
   private tokenManager: TokenManager;
   private conversationManager: ConversationManager;
+  private config: MCPServerConfig;
   private isRunning: boolean = false;
+  private userConversations: Map<string, UserConversationMapping> = new Map();
+  private auditLogs: AuditLogEntry[] = [];
 
   /**
-   * Create a new MCP server instance
+   * Create a new enhanced MCP server instance
    * @param client - Direct Line client
    * @param tokenManager - Token manager
    * @param conversationManager - Conversation manager
+   * @param config - Server configuration
    */
   constructor(
     client: DirectLineClient,
     tokenManager: TokenManager,
-    conversationManager: ConversationManager
+    conversationManager: ConversationManager,
+    config: MCPServerConfig = { transportMode: 'stdio' }
   ) {
     this.client = client;
     this.tokenManager = tokenManager;
     this.conversationManager = conversationManager;
+    this.config = config;
 
     // Initialize MCP server
     this.server = new Server(
       {
         name: 'copilot-studio-agent-direct-line-mcp',
-        version: '1.0.3',
+        version: '2.0.0',
       },
       {
         capabilities: {
@@ -139,37 +183,51 @@ export class CopilotStudioMCPServer {
     // Handle tool calls
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
+      const userContext = (request as any).userContext as UserContext | undefined;
 
-      console.log(`[MCP] Tool called: ${name}`, args);
+      console.log(
+        `[MCP] Tool called: ${name} by user: ${userContext?.userId || 'anonymous'}`,
+        args
+      );
 
       try {
         switch (name) {
           case 'send_message':
-            return await this.handleSendMessage(args || {});
+            return await this.handleSendMessage(args || {}, userContext);
           case 'start_conversation':
-            return await this.handleStartConversation(args || {});
+            return await this.handleStartConversation(args || {}, userContext);
           case 'end_conversation':
-            return await this.handleEndConversation(args || {});
+            return await this.handleEndConversation(args || {}, userContext);
           case 'get_conversation_history':
-            return await this.handleGetConversationHistory(args || {});
+            return await this.handleGetConversationHistory(args || {}, userContext);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
       } catch (error) {
         console.error(`[MCP] Tool error: ${name}`, error);
+        this.logAudit({
+          timestamp: Date.now(),
+          userId: userContext?.userId,
+          action: `${name}_error`,
+          details: { error: error instanceof Error ? error.message : String(error) },
+        });
         return transformErrorToMCPResponse(error);
       }
     });
 
-    console.log('[MCP] Server handlers configured');
+    console.log(`[MCP] Server handlers configured for ${this.config.transportMode} transport`);
   }
 
   /**
-   * Handle send_message tool
+   * Handle send_message tool with user context
    */
-  private async handleSendMessage(args: Record<string, unknown>) {
-    // Validate input arguments
+  private async handleSendMessage(args: Record<string, unknown>, userContext?: UserContext) {
     const { message, conversationId } = validateToolArgs(SendMessageArgsSchema, args);
+
+    // Validate permissions if user context exists
+    if (userContext && conversationId) {
+      this.validateUserConversationAccess(userContext.userId, conversationId);
+    }
 
     try {
       let convId = conversationId;
@@ -182,36 +240,52 @@ export class CopilotStudioMCPServer {
           throw new Error(`Conversation ${convId} not found or expired`);
         }
       } else {
-        // Create new conversation with unique client ID
-        const clientId = `mcp-client-${Date.now()}`;
+        // Create new conversation with user-specific client ID
+        const clientId = userContext
+          ? `user-${userContext.userId}-${Date.now()}`
+          : `mcp-client-${Date.now()}`;
         convState = await this.conversationManager.createConversation(clientId);
         convId = convState.conversationId;
+
+        // Associate conversation with user
+        if (userContext) {
+          this.associateConversationWithUser(userContext.userId, convId);
+        }
       }
 
-      // Send message to Direct Line
+      // Send message to Direct Line with user metadata
       const activityId = await this.client.sendActivity(
         {
           conversationId: convId,
           activity: {
             type: 'message',
-            from: { id: convState.clientId, name: 'MCP User' },
+            from: {
+              id: convState.clientId,
+              name: userContext?.name || 'MCP User',
+            },
             text: message,
             timestamp: new Date().toISOString(),
+            // Add user metadata to activity
+            channelData: userContext
+              ? {
+                  userId: userContext.userId,
+                  userEmail: userContext.email,
+                  tenantId: userContext.tenantId,
+                }
+              : undefined,
           },
         },
         convState.token
       );
 
-      // Poll for response (with timeout)
+      // Poll for response
       const startTime = Date.now();
-      const timeout = 30000; // 30 seconds
+      const timeout = 30000;
       let botResponse = '';
 
       while (Date.now() - startTime < timeout) {
-        // Wait a bit before polling
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        // Get activities
         const activitySet = await this.client.getActivities(
           {
             conversationId: convId,
@@ -220,23 +294,19 @@ export class CopilotStudioMCPServer {
           convState.token
         );
 
-        // Update watermark
         if (activitySet.watermark) {
           this.conversationManager.updateWatermark(convId, activitySet.watermark);
         }
 
-        // Look for bot responses
         const botActivities = activitySet.activities.filter(
           (a) => a.type === 'message' && a.from?.id !== convState.clientId
         );
 
         if (botActivities.length > 0) {
-          // Add to history
           botActivities.forEach((activity) => {
             this.conversationManager.addToHistory(convId!, activity);
           });
 
-          // Get the latest bot message
           const latestBot = botActivities[botActivities.length - 1];
           botResponse = latestBot.text || '[No text response]';
           break;
@@ -246,6 +316,15 @@ export class CopilotStudioMCPServer {
       if (!botResponse) {
         botResponse = '[No response received within timeout period]';
       }
+
+      // Audit log
+      this.logAudit({
+        timestamp: Date.now(),
+        userId: userContext?.userId,
+        action: 'send_message',
+        conversationId: convId,
+        details: { activityId },
+      });
 
       return createSuccessResponse({
         conversationId: convId,
@@ -260,18 +339,32 @@ export class CopilotStudioMCPServer {
   }
 
   /**
-   * Handle start_conversation tool
+   * Handle start_conversation tool with user context
    */
-  private async handleStartConversation(args: Record<string, unknown>) {
-    // Validate input arguments
+  private async handleStartConversation(
+    args: Record<string, unknown>,
+    userContext?: UserContext
+  ) {
     const { initialMessage } = validateToolArgs(StartConversationArgsSchema, args);
 
     try {
-      // Create new conversation with unique client ID
-      const clientId = `mcp-client-${Date.now()}`;
+      // Create new conversation with user-specific client ID
+      const clientId = userContext
+        ? `user-${userContext.userId}-${Date.now()}`
+        : `mcp-client-${Date.now()}`;
       const convState = await this.conversationManager.createConversation(clientId);
 
-      let result: { conversationId: string; status: string; response?: string; activityId?: string } = {
+      // Associate conversation with user
+      if (userContext) {
+        this.associateConversationWithUser(userContext.userId, convState.conversationId);
+      }
+
+      let result: {
+        conversationId: string;
+        status: string;
+        response?: string;
+        activityId?: string;
+      } = {
         conversationId: convState.conversationId,
         status: 'started',
       };
@@ -283,15 +376,22 @@ export class CopilotStudioMCPServer {
             conversationId: convState.conversationId,
             activity: {
               type: 'message',
-              from: { id: clientId, name: 'MCP User' },
+              from: { id: clientId, name: userContext?.name || 'MCP User' },
               text: initialMessage,
               timestamp: new Date().toISOString(),
+              channelData: userContext
+                ? {
+                    userId: userContext.userId,
+                    userEmail: userContext.email,
+                    tenantId: userContext.tenantId,
+                  }
+                : undefined,
             },
           },
           convState.token
         );
 
-        // Poll for response
+        // Poll for response (same logic as send_message)
         const startTime = Date.now();
         const timeout = 30000;
         let botResponse = '';
@@ -330,6 +430,14 @@ export class CopilotStudioMCPServer {
         result.activityId = activityId;
       }
 
+      // Audit log
+      this.logAudit({
+        timestamp: Date.now(),
+        userId: userContext?.userId,
+        action: 'start_conversation',
+        conversationId: convState.conversationId,
+      });
+
       return createSuccessResponse(result);
     } catch (error) {
       throw new Error(
@@ -339,14 +447,17 @@ export class CopilotStudioMCPServer {
   }
 
   /**
-   * Handle end_conversation tool
+   * Handle end_conversation tool with user context
    */
-  private async handleEndConversation(args: Record<string, unknown>) {
-    // Validate input arguments
+  private async handleEndConversation(args: Record<string, unknown>, userContext?: UserContext) {
     const { conversationId } = validateToolArgs(EndConversationArgsSchema, args);
 
+    // Validate permissions if user context exists
+    if (userContext) {
+      this.validateUserConversationAccess(userContext.userId, conversationId);
+    }
+
     try {
-      // Check if conversation exists
       const convState = this.conversationManager.getConversation(conversationId);
       if (!convState) {
         throw new Error(`Conversation ${conversationId} not found or already ended`);
@@ -354,6 +465,20 @@ export class CopilotStudioMCPServer {
 
       // End the conversation
       this.conversationManager.endConversation(conversationId);
+
+      // Remove from user mapping
+      if (userContext) {
+        this.removeUserConversation(userContext.userId, conversationId);
+      }
+
+      // Audit log
+      this.logAudit({
+        timestamp: Date.now(),
+        userId: userContext?.userId,
+        action: 'end_conversation',
+        conversationId,
+        details: { messageCount: convState.messageHistory.length },
+      });
 
       return createSuccessResponse({
         conversationId,
@@ -368,28 +493,31 @@ export class CopilotStudioMCPServer {
   }
 
   /**
-   * Handle get_conversation_history tool
+   * Handle get_conversation_history tool with user context
    */
-  private async handleGetConversationHistory(args: Record<string, unknown>) {
-    // Validate input arguments
+  private async handleGetConversationHistory(
+    args: Record<string, unknown>,
+    userContext?: UserContext
+  ) {
     const { conversationId, limit } = validateToolArgs(GetConversationHistoryArgsSchema, args);
 
+    // Validate permissions if user context exists
+    if (userContext) {
+      this.validateUserConversationAccess(userContext.userId, conversationId);
+    }
+
     try {
-      // Get conversation state
       const convState = this.conversationManager.getConversation(conversationId);
       if (!convState) {
         throw new Error(`Conversation ${conversationId} not found or expired`);
       }
 
-      // Get message history
       let history = convState.messageHistory;
 
-      // Apply limit if specified
       if (limit && limit > 0) {
         history = history.slice(-limit);
       }
 
-      // Format activities for response
       const formattedHistory = history.map((activity) => ({
         id: activity.id,
         type: activity.type,
@@ -398,6 +526,15 @@ export class CopilotStudioMCPServer {
         text: activity.text,
         attachments: activity.attachments,
       }));
+
+      // Audit log
+      this.logAudit({
+        timestamp: Date.now(),
+        userId: userContext?.userId,
+        action: 'get_conversation_history',
+        conversationId,
+        details: { messageCount: formattedHistory.length },
+      });
 
       return createSuccessResponse({
         conversationId,
@@ -413,6 +550,278 @@ export class CopilotStudioMCPServer {
   }
 
   /**
+   * Associate conversation with user for isolation
+   */
+  private associateConversationWithUser(userId: string, conversationId: string): void {
+    let userMapping = this.userConversations.get(userId);
+
+    if (!userMapping) {
+      userMapping = {
+        userId,
+        conversationIds: new Set(),
+      };
+      this.userConversations.set(userId, userMapping);
+    }
+
+    userMapping.conversationIds.add(conversationId);
+  }
+
+  /**
+   * Remove conversation from user mapping
+   */
+  private removeUserConversation(userId: string, conversationId: string): void {
+    const userMapping = this.userConversations.get(userId);
+
+    if (userMapping) {
+      userMapping.conversationIds.delete(conversationId);
+
+      if (userMapping.conversationIds.size === 0) {
+        this.userConversations.delete(userId);
+      }
+    }
+  }
+
+  /**
+   * Validate user has access to conversation
+   */
+  private validateUserConversationAccess(userId: string, conversationId: string): void {
+    const userMapping = this.userConversations.get(userId);
+
+    if (!userMapping || !userMapping.conversationIds.has(conversationId)) {
+      throw new Error(`Access denied: User ${userId} does not have access to conversation ${conversationId}`);
+    }
+  }
+
+  /**
+   * Get user's conversations
+   */
+  getUserConversations(userId: string): string[] {
+    const userMapping = this.userConversations.get(userId);
+    return userMapping ? Array.from(userMapping.conversationIds) : [];
+  }
+
+  /**
+   * Log audit entry
+   */
+  private logAudit(entry: AuditLogEntry): void {
+    this.auditLogs.push(entry);
+
+    // Keep only last 10000 logs in memory
+    if (this.auditLogs.length > 10000) {
+      this.auditLogs = this.auditLogs.slice(-10000);
+    }
+
+    console.log(
+      `[Audit] ${entry.action} - User: ${entry.userId || 'anonymous'} - Conv: ${entry.conversationId || 'N/A'}`
+    );
+  }
+
+  /**
+   * Get audit logs
+   */
+  getAuditLogs(filter?: { userId?: string; action?: string; since?: number }): AuditLogEntry[] {
+    let logs = this.auditLogs;
+
+    if (filter) {
+      if (filter.userId) {
+        logs = logs.filter((log) => log.userId === filter.userId);
+      }
+      if (filter.action) {
+        logs = logs.filter((log) => log.action === filter.action);
+      }
+      if (filter.since !== undefined) {
+        logs = logs.filter((log) => log.timestamp >= filter.since!);
+      }
+    }
+
+    return logs;
+  }
+
+  /**
+   * Handle direct HTTP POST message (modern transport for VS Code)
+   * This method handles JSON-RPC messages directly without requiring SSE
+   */
+  async handleHttpMessage(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    // When using Express with express.json() middleware, body is already parsed
+    const parsedBody = (req as any).body;
+
+    if (!parsedBody || typeof parsedBody !== 'object') {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        jsonrpc: '2.0',
+        id: null,
+        error: {
+          code: -32600,
+          message: 'Invalid request body: expected JSON object'
+        }
+      }));
+      return;
+    }
+
+    const { jsonrpc, id, method, params } = parsedBody;
+
+    console.log('[MCP] Received HTTP POST message:', method || 'unknown method');
+
+    try {
+      let result: any;
+
+      // Handle MCP protocol methods directly
+      switch (method) {
+        case 'initialize':
+          // Return server info and capabilities
+          result = {
+            protocolVersion: '2024-11-05',
+            capabilities: {
+              tools: {}
+            },
+            serverInfo: {
+              name: 'copilot-studio-agent-direct-line-mcp',
+              version: '2.0.0'
+            }
+          };
+          break;
+
+        case 'tools/list':
+          // Return tools list directly for stateless HTTP
+          result = {
+            tools: [
+              {
+                name: 'send_message',
+                description: 'Send a message to the Copilot Studio Agent',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    message: {
+                      type: 'string',
+                      description: 'The message text to send',
+                    },
+                    conversationId: {
+                      type: 'string',
+                      description: 'Optional conversation ID to continue existing conversation',
+                    },
+                  },
+                  required: ['message'],
+                },
+              },
+              {
+                name: 'start_conversation',
+                description: 'Start a new conversation with the Copilot Studio Agent',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    initialMessage: {
+                      type: 'string',
+                      description: 'Optional first message to send',
+                    },
+                  },
+                },
+              },
+              {
+                name: 'end_conversation',
+                description: 'End an existing conversation and clean up resources',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    conversationId: {
+                      type: 'string',
+                      description: 'Conversation ID to terminate',
+                    },
+                  },
+                  required: ['conversationId'],
+                },
+              },
+              {
+                name: 'get_conversation_history',
+                description: 'Retrieve message history for a conversation',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    conversationId: {
+                      type: 'string',
+                      description: 'Conversation ID',
+                    },
+                    limit: {
+                      type: 'number',
+                      description: 'Maximum number of messages to return',
+                    },
+                  },
+                  required: ['conversationId'],
+                },
+              },
+            ],
+          };
+          break;
+
+        case 'tools/call':
+          // Handle tool call directly with user context
+          const userContext = (req as any).userContext;
+          const toolName = params?.name;
+          const toolArgs = params?.arguments || {};
+
+          if (!toolName || typeof toolName !== 'string') {
+            throw {
+              code: -32602,
+              message: 'Invalid params: name is required'
+            };
+          }
+
+          // Call the appropriate handler directly
+          switch (toolName) {
+            case 'send_message':
+              result = await this.handleSendMessage(toolArgs, userContext);
+              break;
+            case 'start_conversation':
+              result = await this.handleStartConversation(toolArgs, userContext);
+              break;
+            case 'end_conversation':
+              result = await this.handleEndConversation(toolArgs, userContext);
+              break;
+            case 'get_conversation_history':
+              result = await this.handleGetConversationHistory(toolArgs, userContext);
+              break;
+            default:
+              throw {
+                code: -32601,
+                message: `Unknown tool: ${toolName}`
+              };
+          }
+          break;
+
+        default:
+          throw {
+            code: -32601,
+            message: `Method not found: ${method}`
+          };
+      }
+
+      // Send JSON-RPC success response
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        jsonrpc: jsonrpc || '2.0',
+        id,
+        result
+      }));
+
+    } catch (error: any) {
+      // Send JSON-RPC error response
+      const errorCode = error.code || -32603;
+      const errorMessage = error.message || (error instanceof Error ? error.message : 'Internal error');
+
+      console.error('[MCP] HTTP message error:', errorMessage);
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        jsonrpc: jsonrpc || '2.0',
+        id,
+        error: {
+          code: errorCode,
+          message: errorMessage
+        }
+      }));
+    }
+  }
+
+  /**
    * Start the MCP server
    */
   async start(): Promise<void> {
@@ -420,7 +829,7 @@ export class CopilotStudioMCPServer {
     await this.server.connect(transport);
     this.isRunning = true;
 
-    console.log('[MCP] Server started on stdio transport');
+    console.log(`[MCP] Enhanced server started on ${this.config.transportMode} transport`);
   }
 
   /**
@@ -432,7 +841,7 @@ export class CopilotStudioMCPServer {
     await this.server.close();
     this.isRunning = false;
 
-    console.log('[MCP] Server stopped');
+    console.log('[MCP] Enhanced server stopped');
   }
 
   /**
@@ -440,5 +849,25 @@ export class CopilotStudioMCPServer {
    */
   isServerRunning(): boolean {
     return this.isRunning;
+  }
+
+  /**
+   * Get server statistics
+   */
+  getStatistics(): {
+    totalUsers: number;
+    totalConversations: number;
+    auditLogCount: number;
+    transportMode: TransportMode;
+  } {
+    return {
+      totalUsers: this.userConversations.size,
+      totalConversations: Array.from(this.userConversations.values()).reduce(
+        (sum, mapping) => sum + mapping.conversationIds.size,
+        0
+      ),
+      auditLogCount: this.auditLogs.length,
+      transportMode: this.config.transportMode,
+    };
   }
 }

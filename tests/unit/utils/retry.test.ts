@@ -11,8 +11,8 @@ import {
   ErrorType,
   classifyError,
   isRetryableError,
-} from '../retry.js';
-import { CircuitState } from '../circuit-breaker.js';
+} from '../../../src/utils/retry.js';
+import { CircuitState } from '../../../src/utils/circuit-breaker.js';
 import { AxiosError } from 'axios';
 
 // Helper to create mock AxiosError

@@ -1,7 +1,7 @@
 {
   "name": "copilot-studio-agent-direct-line-mcp",
   "version": "1.0.7",
-  "description": "MCP server for Microsoft Copilot Studio Agent integration via Direct Line 3.0",
+  "description": "VS Code MCP server for Microsoft Copilot Studio Agent integration via Direct Line 3.0 API with HTTP transport and OAuth authentication",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -27,11 +27,15 @@
   },
   "keywords": [
     "mcp",
+    "vscode",
     "copilot-studio",
     "direct-line",
     "bot-framework",
     "microsoft",
     "model-context-protocol",
+    "http-transport",
+    "oauth",
+    "azure-entra-id",
     "chatbot",
     "conversational-ai"
   ],
