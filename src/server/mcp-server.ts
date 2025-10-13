@@ -185,7 +185,7 @@ export class EnhancedMCPServer {
       const { name, arguments: args } = request.params;
       const userContext = (request as any).userContext as UserContext | undefined;
 
-      console.log(
+      console.error(
         `[MCP] Tool called: ${name} by user: ${userContext?.userId || 'anonymous'}`,
         args
       );
@@ -215,7 +215,7 @@ export class EnhancedMCPServer {
       }
     });
 
-    console.log(`[MCP] Server handlers configured for ${this.config.transportMode} transport`);
+    console.error(`[MCP] Server handlers configured for ${this.config.transportMode} transport`);
   }
 
   /**
@@ -611,7 +611,7 @@ export class EnhancedMCPServer {
       this.auditLogs = this.auditLogs.slice(-10000);
     }
 
-    console.log(
+    console.error(
       `[Audit] ${entry.action} - User: ${entry.userId || 'anonymous'} - Conv: ${entry.conversationId || 'N/A'}`
     );
   }
@@ -660,7 +660,7 @@ export class EnhancedMCPServer {
 
     const { jsonrpc, id, method, params } = parsedBody;
 
-    console.log('[MCP] Received HTTP POST message:', method || 'unknown method');
+    console.error('[MCP] Received HTTP POST message:', method || 'unknown method');
 
     try {
       let result: any;
@@ -829,7 +829,7 @@ export class EnhancedMCPServer {
     await this.server.connect(transport);
     this.isRunning = true;
 
-    console.log(`[MCP] Enhanced server started on ${this.config.transportMode} transport`);
+    console.error(`[MCP] Enhanced server started on ${this.config.transportMode} transport`);
   }
 
   /**
@@ -841,7 +841,7 @@ export class EnhancedMCPServer {
     await this.server.close();
     this.isRunning = false;
 
-    console.log('[MCP] Enhanced server stopped');
+    console.error('[MCP] Enhanced server stopped');
   }
 
   /**

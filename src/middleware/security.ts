@@ -534,7 +534,7 @@ export class SecurityMiddleware {
     }
 
     // Log to console (in production, send to logging service)
-    console.log(
+    console.error(
       `[Security] ${event.event} - User: ${event.userId || 'anonymous'} - IP: ${event.ipAddress} - Correlation: ${event.correlationId}`
     );
   }

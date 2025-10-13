@@ -92,7 +92,7 @@ export class ConversationManager {
     // Schedule cleanup
     this.scheduleCleanup(conversation.conversationId);
 
-    console.log(`[ConversationManager] Created conversation ${conversation.conversationId} for client ${clientId}`);
+    console.error(`[ConversationManager] Created conversation ${conversation.conversationId} for client ${clientId}`);
 
     return state;
   }
@@ -175,7 +175,7 @@ export class ConversationManager {
     // Remove conversation
     this.conversations.delete(conversationId);
 
-    console.log(
+    console.error(
       `[ConversationManager] Ended conversation ${conversationId} (lifetime: ${(lifetime / 1000).toFixed(0)}s)`
     );
   }
@@ -193,7 +193,7 @@ export class ConversationManager {
 
     // Schedule new cleanup
     const timer = setTimeout(() => {
-      console.log(`[ConversationManager] Auto-cleanup conversation ${conversationId} (idle timeout)`);
+      console.error(`[ConversationManager] Auto-cleanup conversation ${conversationId} (idle timeout)`);
       this.endConversation(conversationId);
     }, this.idleTimeout);
 

@@ -380,7 +380,7 @@ export class SecurityMonitor {
       tracking.blockedUntil = undefined;
     }
 
-    console.log(`[SecurityMonitor] Unblocked IP ${ipAddress}`);
+    console.error(`[SecurityMonitor] Unblocked IP ${ipAddress}`);
   }
 
   /**
@@ -441,7 +441,7 @@ export class SecurityMonitor {
       incident.resolved = true;
       incident.resolvedAt = Date.now();
       incident.responseAction = responseAction;
-      console.log(`[SecurityMonitor] Resolved incident ${incidentId}: ${responseAction}`);
+      console.error(`[SecurityMonitor] Resolved incident ${incidentId}: ${responseAction}`);
     }
   }
 

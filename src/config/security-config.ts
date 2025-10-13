@@ -282,7 +282,7 @@ export function certificateAuth(req: Request, res: Response, next: NextFunction)
     fingerprint: cert.fingerprint,
   };
 
-  console.log(`[Security] Client authenticated via certificate: ${cert.subject.CN}`);
+  console.error(`[Security] Client authenticated via certificate: ${cert.subject.CN}`);
 
   next();
 }

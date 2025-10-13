@@ -139,7 +139,7 @@ export class MCPHttpServer {
 
     res.on('finish', () => {
       const duration = Date.now() - start;
-      console.log(
+      console.error(
         `[HTTP] ${req.method} ${req.path} ${res.statusCode} ${duration}ms - ${req.ip} - ${req.get('user-agent')}`
       );
     });
@@ -173,7 +173,7 @@ export class MCPHttpServer {
     this.app.get('/auth/login', async (req, res) => {
       try {
         // Log all query parameters for debugging
-        console.log('[OAuth] Login request query parameters:', req.query);
+        console.error('[OAuth] Login request query parameters:', req.query);
 
         // VS Code sends redirect_uri and state parameters
         const vscodeRedirectUri = req.query.redirect_uri as string | undefined;
@@ -187,11 +187,11 @@ export class MCPHttpServer {
         // Store VS Code's redirect_uri and state if present
         if (vscodeRedirectUri) {
           (req.session as any).vscodeRedirectUri = vscodeRedirectUri;
-          console.log('[OAuth] Stored VS Code redirect_uri:', vscodeRedirectUri);
+          console.error('[OAuth] Stored VS Code redirect_uri:', vscodeRedirectUri);
         }
         if (vscodeState) {
           (req.session as any).vscodeState = vscodeState;
-          console.log('[OAuth] Stored VS Code state:', vscodeState);
+          console.error('[OAuth] Stored VS Code state:', vscodeState);
         }
 
         res.redirect(authUrl);
@@ -272,9 +272,9 @@ export class MCPHttpServer {
         if (vscodeRedirectUri) {
           // For VS Code OAuth, redirect back to VS Code with authorization code
           // VS Code expects: redirect_uri?code=AUTH_CODE&state=STATE
-          console.log('[OAuth] VS Code auth flow detected, redirecting to:', vscodeRedirectUri);
-          console.log('[OAuth] Session token (as code):', sessionToken);
-          console.log('[OAuth] VS Code state:', vscodeState);
+          console.error('[OAuth] VS Code auth flow detected, redirecting to:', vscodeRedirectUri);
+          console.error('[OAuth] Session token (as code):', sessionToken);
+          console.error('[OAuth] VS Code state:', vscodeState);
 
           const redirectUrl = new URL(vscodeRedirectUri);
           redirectUrl.searchParams.set('code', sessionToken);
@@ -286,7 +286,7 @@ export class MCPHttpServer {
           delete (req.session as any).vscodeRedirectUri;
           delete (req.session as any).vscodeState;
 
-          console.log('[OAuth] Final redirect URL:', redirectUrl.toString());
+          console.error('[OAuth] Final redirect URL:', redirectUrl.toString());
           res.redirect(redirectUrl.toString());
         } else {
           // Show success page for browser-based authentication
@@ -399,12 +399,12 @@ export class MCPHttpServer {
     // OAuth Authorization Endpoint (standard location)
     this.app.get('/authorize', (req, res) => {
       // Log all query parameters for debugging
-      console.log('[OAuth] /authorize request query parameters:', req.query);
+      console.error('[OAuth] /authorize request query parameters:', req.query);
 
       // Redirect to our auth/login endpoint, preserving all query parameters
       const queryString = new URLSearchParams(req.query as any).toString();
       const loginUrl = `/auth/login${queryString ? `?${queryString}` : ''}`;
-      console.log('[OAuth] Authorization request, redirecting to:', loginUrl);
+      console.error('[OAuth] Authorization request, redirecting to:', loginUrl);
       res.redirect(loginUrl);
     });
 
@@ -538,7 +538,7 @@ export class MCPHttpServer {
       }
 
       try {
-        console.log('[HTTP] POST /mcp - Handling message');
+        console.error('[HTTP] POST /mcp - Handling message');
         // Use new HTTP POST handler for direct JSON-RPC communication (VS Code compatible)
         await (this.mcpServer as any).handleHttpMessage(req, res);
       } catch (error) {
@@ -1226,12 +1226,12 @@ export class MCPHttpServer {
    */
   setMCPServer(server: EnhancedMCPServer): void {
     this.mcpServer = server;
-    console.log('[HTTP] MCP server instance connected');
+    console.error('[HTTP] MCP server instance connected');
   }
 
   start(): void {
     this.app.listen(this.config.port, () => {
-      console.log(`[HTTP] Server listening on port ${this.config.port}`);
+      console.error(`[HTTP] Server listening on port ${this.config.port}`);
     });
   }
 
@@ -1246,6 +1246,6 @@ export class MCPHttpServer {
    * Stop the HTTP server
    */
   stop(): void {
-    console.log('[HTTP] Server stopped');
+    console.error('[HTTP] Server stopped');
   }
 }

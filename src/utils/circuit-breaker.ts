@@ -208,7 +208,7 @@ export class CircuitBreaker {
 
     if (this.state === CircuitState.HALF_OPEN) {
       this.successCount++;
-      console.log(
+      console.error(
         `[CircuitBreaker] Success in HALF_OPEN state (${this.successCount}/${this.config.successThreshold})`
       );
 
@@ -239,7 +239,7 @@ export class CircuitBreaker {
 
       this.failureCount = this.failureTimestamps.length;
 
-      console.log(
+      console.error(
         `[CircuitBreaker] Failure recorded (type: ${failureType}, ${this.failureCount}/${this.config.failureThreshold} in window)`
       );
 
@@ -252,7 +252,7 @@ export class CircuitBreaker {
         this.successCount = 0;
       }
     } else {
-      console.log(
+      console.error(
         `[CircuitBreaker] Failure excluded from count (type: ${failureType})`
       );
     }
@@ -282,7 +282,7 @@ export class CircuitBreaker {
     this.state = newState;
     this.lastStateChange = Date.now();
 
-    console.log(`[CircuitBreaker] State transition: ${oldState} → ${newState}`);
+    console.error(`[CircuitBreaker] State transition: ${oldState} → ${newState}`);
 
     // Reset counters on state change
     if (newState === CircuitState.CLOSED) {
@@ -324,6 +324,6 @@ export class CircuitBreaker {
     this.rejectionCount = 0;
     this.failureTimestamps = [];
     this.lastStateChange = Date.now();
-    console.log('[CircuitBreaker] Reset to CLOSED state');
+    console.error('[CircuitBreaker] Reset to CLOSED state');
   }
 }

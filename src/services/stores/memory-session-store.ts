@@ -194,7 +194,7 @@ export class MemorySessionStore implements ISessionStore {
       try {
         const cleaned = await this.cleanup();
         if (cleaned > 0) {
-          console.log(`[MemorySessionStore] Cleaned up ${cleaned} expired sessions`);
+          console.error(`[MemorySessionStore] Cleaned up ${cleaned} expired sessions`);
         }
       } catch (error) {
         console.error('[MemorySessionStore] Cleanup error:', error);

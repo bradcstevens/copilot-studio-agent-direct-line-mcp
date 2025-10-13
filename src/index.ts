@@ -26,29 +26,29 @@ let httpServer: MCPHttpServer | null = null;
  */
 async function main(): Promise<void> {
   try {
-    console.log('Starting Copilot Studio Agent Direct Line MCP Server...');
+    console.error('Starting Copilot Studio Agent Direct Line MCP Server...');
 
     // Load and validate environment configuration
     const env = getEnv();
-    console.log(`[Config] Environment loaded successfully`);
-    console.log(`[Config] Log level: ${env.LOG_LEVEL}`);
-    console.log(`[Config] Token refresh interval: ${env.TOKEN_REFRESH_INTERVAL}ms`);
+    console.error(`[Config] Environment loaded successfully`);
+    console.error(`[Config] Log level: ${env.LOG_LEVEL}`);
+    console.error(`[Config] Token refresh interval: ${env.TOKEN_REFRESH_INTERVAL}ms`);
 
     // Determine transport mode from environment
     const transportMode: TransportMode = (process.env.MCP_TRANSPORT_MODE as TransportMode) || 'stdio';
-    console.log(`[Config] Transport mode: ${transportMode}`);
+    console.error(`[Config] Transport mode: ${transportMode}`);
 
     // Initialize Direct Line client
     const client = new DirectLineClient(env.DIRECT_LINE_SECRET);
-    console.log('[DirectLine] Client initialized');
+    console.error('[DirectLine] Client initialized');
 
     // Initialize Token Manager
     const tokenManager = new TokenManager(client, env.TOKEN_REFRESH_INTERVAL);
-    console.log('[TokenManager] Token manager initialized');
+    console.error('[TokenManager] Token manager initialized');
 
     // Initialize Conversation Manager
     const conversationManager = new ConversationManager(client, tokenManager);
-    console.log('[ConversationManager] Conversation manager initialized');
+    console.error('[ConversationManager] Conversation manager initialized');
 
     // Initialize authentication components if using HTTP transport or authentication is enabled
     let entraidClient: EntraIDClient | undefined;
@@ -70,7 +70,7 @@ async function main(): Promise<void> {
         redirectUri: process.env.ENTRA_REDIRECT_URI || 'http://localhost:3001/auth/callback',
         scopes: process.env.ENTRA_SCOPES?.split(',') || ['openid', 'profile', 'email'],
       });
-      console.log('[EntraID] OAuth client initialized');
+      console.error('[EntraID] OAuth client initialized');
 
       // Initialize session store based on configuration
       let sessionStore: ISessionStore;
@@ -82,13 +82,13 @@ async function main(): Promise<void> {
             storageDir: process.env.SESSION_STORAGE_DIR || '.sessions',
             encryptionKey: process.env.SESSION_ENCRYPTION_KEY || process.env.SESSION_SECRET || randomBytes(32).toString('hex'),
           });
-          console.log('[SessionStore] File-based session store initialized');
+          console.error('[SessionStore] File-based session store initialized');
           break;
 
         case 'memory':
         default:
           sessionStore = new MemorySessionStore();
-          console.log('[SessionStore] In-memory session store initialized');
+          console.error('[SessionStore] In-memory session store initialized');
           break;
       }
 
@@ -102,7 +102,7 @@ async function main(): Promise<void> {
           ? parseInt(process.env.MAX_SESSIONS_PER_USER, 10)
           : 5,
       });
-      console.log('[SessionManager] Session manager initialized');
+      console.error('[SessionManager] Session manager initialized');
 
       // Initialize HTTP server if using HTTP transport
       if (transportMode === 'http') {
@@ -116,7 +116,7 @@ async function main(): Promise<void> {
           entraidClient,
           sessionManager
         );
-        console.log('[HTTP] HTTP server initialized');
+        console.error('[HTTP] HTTP server initialized');
       }
     }
 
@@ -142,7 +142,7 @@ async function main(): Promise<void> {
       await server.start();
     }
 
-    console.log('✅ Server ready and listening for MCP requests');
+    console.error('✅ Server ready and listening for MCP requests');
   } catch (error) {
     console.error('Fatal error during server startup:', error);
     process.exit(1);
@@ -154,13 +154,13 @@ async function main(): Promise<void> {
  */
 function setupShutdownHandlers(): void {
   const shutdown = async (signal: string) => {
-    console.log(`\n[Shutdown] Received ${signal}, shutting down gracefully...`);
+    console.error(`\n[Shutdown] Received ${signal}, shutting down gracefully...`);
 
     if (server) {
       await server.stop();
     }
 
-    console.log('[Shutdown] Server stopped successfully');
+    console.error('[Shutdown] Server stopped successfully');
     process.exit(0);
   };
 

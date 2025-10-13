@@ -147,7 +147,7 @@ export class TokenManager {
     const delay = Math.max(0, refreshAt - Date.now());
 
     const timer = setTimeout(async () => {
-      console.log(`[TokenManager] Proactively refreshing token for key: ${key}`);
+      console.error(`[TokenManager] Proactively refreshing token for key: ${key}`);
       this.metrics.refreshCount++;
 
       try {

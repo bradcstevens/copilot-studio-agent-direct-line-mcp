@@ -59,7 +59,7 @@ export function createHttpClient(options: HttpClientOptions = {}): AxiosInstance
           ? `Bearer ${maskSecret(authHeader.replace('Bearer ', ''))}`
           : 'None';
 
-        console.log(`[HTTP] → ${config.method?.toUpperCase()} ${config.url}`, {
+        console.error(`[HTTP] → ${config.method?.toUpperCase()} ${config.url}`, {
           authorization: maskedAuth,
           contentType: config.headers?.['Content-Type'],
         });
@@ -80,7 +80,7 @@ export function createHttpClient(options: HttpClientOptions = {}): AxiosInstance
         };
         const duration = config.metadata?.startTime ? Date.now() - config.metadata.startTime : 0;
 
-        console.log(
+        console.error(
           `[HTTP] ← ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`,
           {
             duration: `${duration}ms`,

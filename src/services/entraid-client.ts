@@ -69,7 +69,7 @@ export class EntraIDClient {
             if (containsPii) {
               return;
             }
-            console.log(`[MSAL] ${message}`);
+            console.error(`[MSAL] ${message}`);
           },
           piiLoggingEnabled: false,
           logLevel: 3, // Info level
@@ -192,7 +192,7 @@ export class EntraIDClient {
               );
             }
 
-            console.log('[EntraIDClient] Token exchange successful');
+            console.error('[EntraIDClient] Token exchange successful');
             return response;
           } catch (error) {
             console.error('[EntraIDClient] Token exchange failed:', error);
@@ -256,7 +256,7 @@ export class EntraIDClient {
               });
             }
 
-            console.log('[EntraIDClient] Token refreshed successfully');
+            console.error('[EntraIDClient] Token refreshed successfully');
             return response;
           } catch (error) {
             console.error('[EntraIDClient] Token refresh failed:', error);
