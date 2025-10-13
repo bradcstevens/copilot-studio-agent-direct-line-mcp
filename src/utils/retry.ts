@@ -23,12 +23,15 @@ export enum ErrorType {
  * @returns Error type
  */
 export function classifyError(error: unknown): ErrorType {
-  if (error instanceof AxiosError) {
-    if (!error.response) {
+  // Check if it's an Axios error using the isAxiosError property (works with mocks too)
+  if (error && typeof error === 'object' && 'isAxiosError' in error && error.isAxiosError) {
+    const axiosError = error as AxiosError;
+
+    if (!axiosError.response) {
       return ErrorType.NETWORK;
     }
 
-    const status = error.response.status;
+    const status = axiosError.response.status;
 
     if (status === 401 || status === 403) {
       return ErrorType.AUTHENTICATION;

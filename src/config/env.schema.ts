@@ -13,7 +13,7 @@ export type LogLevel = z.infer<typeof LogLevel>;
 /**
  * Node environment type
  */
-export const NodeEnv = z.enum(['development', 'staging', 'production']).default('development');
+export const NodeEnv = z.enum(['development', 'staging', 'production', 'test']).default('development');
 export type NodeEnv = z.infer<typeof NodeEnv>;
 
 /**
