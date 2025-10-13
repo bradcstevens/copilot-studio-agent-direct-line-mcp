@@ -3,7 +3,7 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "containerAppName": {
-      "value": "copilot-mcp"
+      "value": "copilot-mcp-prod"
     },
     "location": {
       "value": "eastus"
@@ -12,34 +12,43 @@
       "value": "production"
     },
     "imageTag": {
-      "value": "latest"
+      "value": "${IMAGE_TAG}"
     },
     "containerRegistryName": {
-      "value": "your-acr-name"
-    },
-    "keyVaultName": {
-      "value": "your-keyvault-name"
-    },
-    "redisCacheName": {
-      "value": "your-redis-cache-name"
+      "value": "${AZURE_CONTAINER_REGISTRY_NAME}"
     },
     "minReplicas": {
-      "value": 1
+      "value": 2
     },
     "maxReplicas": {
       "value": 10
     },
     "cpu": {
-      "value": "0.5"
+      "value": "1.0"
     },
     "memory": {
-      "value": "1.0Gi"
+      "value": "2.0Gi"
     },
     "enableIngress": {
       "value": true
     },
     "targetPort": {
       "value": 3000
+    },
+    "directLineSecret": {
+      "value": "${DIRECT_LINE_SECRET}"
+    },
+    "azureClientId": {
+      "value": "${AZURE_CLIENT_ID}"
+    },
+    "azureClientSecret": {
+      "value": "${AZURE_CLIENT_SECRET}"
+    },
+    "azureTenantId": {
+      "value": "${AZURE_TENANT_ID}"
+    },
+    "sessionSecret": {
+      "value": "${SESSION_SECRET}"
     }
   }
 }

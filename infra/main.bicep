@@ -1,5 +1,13 @@
-// Azure Container Apps deployment for Copilot Studio MCP Server
-// Single container deployment with managed environment
+// =============================================================================
+// Azure Container Apps Deployment for Copilot Studio MCP Server
+// Azure Developer CLI (azd) Compatible
+// =============================================================================
+
+targetScope = 'resourceGroup'
+
+// =============================================================================
+// Parameters
+// =============================================================================
 
 @description('Name of the Container App')
 param containerAppName string = 'copilot-mcp'
@@ -22,7 +30,7 @@ param imageTag string = 'latest'
 param containerRegistryName string
 
 @description('Minimum number of replicas')
-@minValue(1)
+@minValue(0)
 @maxValue(30)
 param minReplicas int = 1
 
@@ -31,17 +39,11 @@ param minReplicas int = 1
 @maxValue(30)
 param maxReplicas int = 10
 
-@description('CPU cores per container (0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0)')
+@description('CPU cores per container')
 param cpu string = '0.5'
 
-@description('Memory per container (0.5Gi, 1.0Gi, 1.5Gi, 2.0Gi, 3.0Gi, 3.5Gi, 4.0Gi)')
+@description('Memory per container')
 param memory string = '1.0Gi'
-
-@description('Key Vault name for secrets')
-param keyVaultName string
-
-@description('Redis cache name')
-param redisCacheName string
 
 @description('Enable ingress')
 param enableIngress bool = true
@@ -49,41 +51,76 @@ param enableIngress bool = true
 @description('Target port for ingress')
 param targetPort int = 3000
 
+@description('Direct Line API Secret')
+@secure()
+param directLineSecret string
+
+@description('Azure Client ID (Entra ID)')
+param azureClientId string = ''
+
+@description('Azure Client Secret (Entra ID)')
+@secure()
+param azureClientSecret string = ''
+
+@description('Azure Tenant ID (Entra ID)')
+param azureTenantId string = subscription().tenantId
+
+@description('Session secret for HTTP mode')
+@secure()
+param sessionSecret string
+
+@description('Tags to apply to all resources')
+param tags object = {
+  Environment: environment
+  Application: 'Copilot-Studio-MCP-Server'
+  ManagedBy: 'azd'
+}
+
+// =============================================================================
 // Variables
-var containerAppEnvName = '${containerAppName}-env'
-var logAnalyticsName = '${containerAppName}-logs'
+// =============================================================================
+
+var resourcePrefix = containerAppName
+var containerAppEnvName = '${resourcePrefix}-env'
+var logAnalyticsName = '${resourcePrefix}-logs'
 var containerRegistryUrl = '${containerRegistryName}.azurecr.io'
 var imageName = '${containerRegistryUrl}/${containerAppName}:${imageTag}'
 
-// Existing resources
-resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
-  name: keyVaultName
-}
-
-resource redisCache 'Microsoft.Cache/redis@2023-08-01' existing = {
-  name: redisCacheName
-}
+// =============================================================================
+// Existing Resources
+// =============================================================================
 
 resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
   name: containerRegistryName
 }
 
-// Log Analytics Workspace for Container Apps
+// =============================================================================
+// Log Analytics Workspace
+// =============================================================================
+
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: logAnalyticsName
   location: location
+  tags: tags
   properties: {
     sku: {
       name: 'PerGB2018'
     }
     retentionInDays: 30
+    features: {
+      enableLogAccessUsingOnlyResourcePermissions: true
+    }
   }
 }
 
+// =============================================================================
 // Container Apps Environment
+// =============================================================================
+
 resource containerAppEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
   name: containerAppEnvName
   location: location
+  tags: tags
   properties: {
     appLogsConfiguration: {
       destination: 'log-analytics'
@@ -95,30 +132,14 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
   }
 }
 
-// Managed Identity for Container App
-resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
-  name: '${containerAppName}-identity'
-  location: location
-}
+// =============================================================================
+// Managed Identity
+// =============================================================================
 
-// Grant Key Vault access to managed identity
-resource keyVaultAccessPolicy 'Microsoft.KeyVault/vaults/accessPolicies@2023-07-01' = {
-  name: 'add'
-  parent: keyVault
-  properties: {
-    accessPolicies: [
-      {
-        tenantId: subscription().tenantId
-        objectId: managedIdentity.properties.principalId
-        permissions: {
-          secrets: [
-            'get'
-            'list'
-          ]
-        }
-      }
-    ]
-  }
+resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: '${resourcePrefix}-identity'
+  location: location
+  tags: tags
 }
 
 // Grant ACR pull access to managed identity
@@ -132,10 +153,14 @@ resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
+// =============================================================================
 // Container App
+// =============================================================================
+
 resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
   name: containerAppName
   location: location
+  tags: tags
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
@@ -156,6 +181,12 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
             weight: 100
           }
         ]
+        corsPolicy: {
+          allowedOrigins: ['*']
+          allowedMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+          allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token']
+          allowCredentials: true
+        }
       } : null
       registries: [
         {
@@ -166,22 +197,15 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
       secrets: [
         {
           name: 'direct-line-secret'
-          keyVaultUrl: '${keyVault.properties.vaultUri}secrets/direct-line-secret'
-          identity: managedIdentity.id
+          value: directLineSecret
         }
         {
           name: 'azure-client-secret'
-          keyVaultUrl: '${keyVault.properties.vaultUri}secrets/azure-client-secret'
-          identity: managedIdentity.id
-        }
-        {
-          name: 'redis-connection-string'
-          value: '${redisCache.properties.hostName}:${redisCache.properties.sslPort},password=${redisCache.listKeys().primaryKey},ssl=True,abortConnect=False'
+          value: azureClientSecret
         }
         {
           name: 'session-secret'
-          keyVaultUrl: '${keyVault.properties.vaultUri}secrets/session-secret'
-          identity: managedIdentity.id
+          value: sessionSecret
         }
       ]
     }
@@ -213,7 +237,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
             }
             {
               name: 'AZURE_CLIENT_ID'
-              value: managedIdentity.properties.clientId
+              value: azureClientId
             }
             {
               name: 'AZURE_CLIENT_SECRET'
@@ -221,35 +245,19 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
             }
             {
               name: 'AZURE_TENANT_ID'
-              value: subscription().tenantId
+              value: azureTenantId
             }
             {
-              name: 'KEY_VAULT_URL'
-              value: keyVault.properties.vaultUri
-            }
-            {
-              name: 'SESSION_STORAGE_TYPE'
-              value: 'redis'
-            }
-            {
-              name: 'REDIS_URL'
-              secretRef: 'redis-connection-string'
-            }
-            {
-              name: 'REDIS_TLS_ENABLED'
-              value: 'true'
-            }
-            {
-              name: 'KEY_VAULT_CACHE_ENABLED'
-              value: 'true'
-            }
-            {
-              name: 'KEY_VAULT_CACHE_TTL'
-              value: '300'
+              name: 'SESSION_SECRET'
+              secretRef: 'session-secret'
             }
             {
               name: 'OAUTH_SCOPES'
               value: 'openid profile email'
+            }
+            {
+              name: 'MCP_TRANSPORT_MODE'
+              value: 'http'
             }
           ]
           probes: [
@@ -263,6 +271,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
               initialDelaySeconds: 30
               periodSeconds: 10
               failureThreshold: 3
+              timeoutSeconds: 5
             }
             {
               type: 'Readiness'
@@ -274,6 +283,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
               initialDelaySeconds: 10
               periodSeconds: 5
               failureThreshold: 3
+              timeoutSeconds: 3
             }
             {
               type: 'Startup'
@@ -285,6 +295,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
               initialDelaySeconds: 0
               periodSeconds: 5
               failureThreshold: 12
+              timeoutSeconds: 3
             }
           ]
         }
@@ -326,14 +337,34 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
     }
   }
   dependsOn: [
-    keyVaultAccessPolicy
     acrPullRole
   ]
 }
 
+// =============================================================================
 // Outputs
+// =============================================================================
+
+@description('Container App FQDN')
 output containerAppFqdn string = enableIngress ? containerApp.properties.configuration.ingress.fqdn : ''
+
+@description('Container App Resource ID')
 output containerAppId string = containerApp.id
+
+@description('Container App Name')
 output containerAppName string = containerApp.name
+
+@description('Managed Identity Client ID')
 output managedIdentityClientId string = managedIdentity.properties.clientId
+
+@description('Managed Identity Principal ID')
 output managedIdentityPrincipalId string = managedIdentity.properties.principalId
+
+@description('Log Analytics Workspace ID')
+output logAnalyticsWorkspaceId string = logAnalytics.id
+
+@description('Service Endpoint URL')
+output serviceUrl string = enableIngress ? 'https://${containerApp.properties.configuration.ingress.fqdn}' : ''
+
+@description('Health Check URL')
+output healthCheckUrl string = enableIngress ? 'https://${containerApp.properties.configuration.ingress.fqdn}/health' : ''

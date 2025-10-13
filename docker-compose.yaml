@@ -1,0 +1,12 @@
+name: mcp-container-ts
+services:
+
+  mcp-server:
+    build:
+      context: .
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env
+volumes:
+  pgdata:

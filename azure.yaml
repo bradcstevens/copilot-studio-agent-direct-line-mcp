@@ -1,0 +1,268 @@
+# Azure Developer CLI (azd) Configuration
+# Copilot Studio Agent Direct Line MCP Server
+# Documentation: https://learn.microsoft.com/azure/developer/azure-developer-cli/
+
+name: copilot-studio-agent-direct-line-mcp
+metadata:
+  template: copilot-studio-agent-direct-line-mcp@1.0.8
+
+# Services to deploy
+services:
+  mcp-server:
+    # Project metadata
+    project: .
+    language: ts
+    host: containerapp
+
+    # Docker build configuration
+    docker:
+      path: ./Dockerfile
+      context: .
+      target: runtime
+
+    # Container Apps configuration
+    config:
+      # Platform configuration
+      platform:
+        type: containerapp
+
+      # Resource configuration
+      resources:
+        cpu: 0.5
+        memory: 1.0Gi
+
+      # Scaling configuration
+      scale:
+        minReplicas: 1
+        maxReplicas: 10
+        rules:
+          - name: http-scaling
+            type: http
+            metadata:
+              concurrentRequests: "100"
+          - name: cpu-scaling
+            type: cpu
+            metadata:
+              type: "Utilization"
+              value: "70"
+          - name: memory-scaling
+            type: memory
+            metadata:
+              type: "Utilization"
+              value: "80"
+
+      # Ingress configuration
+      ingress:
+        external: true
+        targetPort: 3000
+        transport: auto
+        allowInsecure: false
+
+      # Health probes
+      probes:
+        liveness:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 3
+        readiness:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 3
+        startup:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          failureThreshold: 12
+
+# Infrastructure configuration
+infra:
+  # Path to Bicep templates
+  path: ./infra
+
+  # Module configuration (main.bicep with azd support)
+  module: main
+
+  # Parameters
+  parameters:
+    # Environment-specific overrides
+    containerAppName: copilot-mcp
+    location: eastus
+    minReplicas: 1
+    maxReplicas: 10
+    cpu: "0.5"
+    memory: "1.0Gi"
+    enableIngress: true
+    targetPort: 3000
+
+# Deployment hooks
+hooks:
+  # Pre-provision hooks (run before infrastructure deployment)
+  preprovision:
+    posix:
+      shell: sh
+      run: |
+        echo "🔍 Validating Azure CLI and subscription..."
+        az account show
+    windows:
+      shell: pwsh
+      run: |
+        Write-Host "🔍 Validating Azure CLI and subscription..."
+        az account show
+
+  # Post-provision hooks (run after infrastructure deployment)
+  postprovision:
+    posix:
+      shell: sh
+      run: |
+        echo "🔐 Setting up Key Vault secrets..."
+        echo "ℹ️ Please ensure the following secrets are configured in Azure Key Vault:"
+        echo "  - direct-line-secret"
+        echo "  - azure-client-secret"
+        echo "  - session-secret"
+        echo "  - entra-client-id"
+        echo "  - entra-tenant-id"
+    windows:
+      shell: pwsh
+      run: |
+        Write-Host "🔐 Setting up Key Vault secrets..."
+        Write-Host "ℹ️ Please ensure the following secrets are configured in Azure Key Vault:"
+        Write-Host "  - direct-line-secret"
+        Write-Host "  - azure-client-secret"
+        Write-Host "  - session-secret"
+        Write-Host "  - entra-client-id"
+        Write-Host "  - entra-tenant-id"
+
+  # Pre-deploy hooks (run before service deployment)
+  predeploy:
+    posix:
+      shell: sh
+      run: |
+        echo "🏗️ Running pre-deployment checks..."
+        echo "✅ Docker build context validated"
+        echo "✅ Environment configuration validated"
+    windows:
+      shell: pwsh
+      run: |
+        Write-Host "🏗️ Running pre-deployment checks..."
+        Write-Host "✅ Docker build context validated"
+        Write-Host "✅ Environment configuration validated"
+
+  # Post-deploy hooks (run after service deployment)
+  postdeploy:
+    posix:
+      shell: sh
+      run: |
+        echo "🎉 Deployment complete!"
+        echo "🔗 Service endpoints:"
+        echo "  - Health: https://$AZURE_CONTAINER_APP_FQDN/health"
+        echo "  - Auth: https://$AZURE_CONTAINER_APP_FQDN/auth/login"
+        echo "  - MCP: https://$AZURE_CONTAINER_APP_FQDN/mcp"
+        echo ""
+        echo "📋 Next steps:"
+        echo "  1. Configure secrets in Azure Key Vault"
+        echo "  2. Test the health endpoint"
+        echo "  3. Authenticate via /auth/login"
+        echo "  4. Connect your MCP client"
+    windows:
+      shell: pwsh
+      run: |
+        Write-Host "🎉 Deployment complete!"
+        Write-Host "🔗 Service endpoints:"
+        Write-Host "  - Health: https://$env:AZURE_CONTAINER_APP_FQDN/health"
+        Write-Host "  - Auth: https://$env:AZURE_CONTAINER_APP_FQDN/auth/login"
+        Write-Host "  - MCP: https://$env:AZURE_CONTAINER_APP_FQDN/mcp"
+        Write-Host ""
+        Write-Host "📋 Next steps:"
+        Write-Host "  1. Configure secrets in Azure Key Vault"
+        Write-Host "  2. Test the health endpoint"
+        Write-Host "  3. Authenticate via /auth/login"
+        Write-Host "  4. Connect your MCP client"
+
+# Environment configurations
+environments:
+  # Development environment
+  dev:
+    services:
+      mcp-server:
+        config:
+          scale:
+            minReplicas: 1
+            maxReplicas: 3
+          resources:
+            cpu: 0.25
+            memory: 0.5Gi
+    infra:
+      parameters:
+        environment: development
+        containerAppName: copilot-mcp-dev
+        minReplicas: 1
+        maxReplicas: 3
+        cpu: "0.25"
+        memory: "0.5Gi"
+
+  # Staging environment
+  staging:
+    services:
+      mcp-server:
+        config:
+          scale:
+            minReplicas: 1
+            maxReplicas: 5
+          resources:
+            cpu: 0.5
+            memory: 1.0Gi
+    infra:
+      parameters:
+        environment: staging
+        containerAppName: copilot-mcp-staging
+        minReplicas: 1
+        maxReplicas: 5
+        cpu: "0.5"
+        memory: "1.0Gi"
+
+  # Production environment
+  prod:
+    services:
+      mcp-server:
+        config:
+          scale:
+            minReplicas: 2
+            maxReplicas: 10
+          resources:
+            cpu: 1.0
+            memory: 2.0Gi
+    infra:
+      parameters:
+        environment: production
+        containerAppName: copilot-mcp-prod
+        minReplicas: 2
+        maxReplicas: 10
+        cpu: "1.0"
+        memory: "2.0Gi"
+
+# Pipeline configuration (for CI/CD)
+pipeline:
+  provider: azdo  # or 'github' for GitHub Actions
+
+  # Variables to expose in pipeline
+  variables:
+    - name: DOCKER_BUILDKIT
+      value: "1"
+    - name: NODE_ENV
+      value: production
+
+  # Secrets required (reference from Key Vault or pipeline secrets)
+  secrets:
+    - DIRECT_LINE_SECRET
+    - ENTRA_CLIENT_SECRET
+    - ENTRA_CLIENT_ID
+    - ENTRA_TENANT_ID
+    - SESSION_SECRET

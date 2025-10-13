@@ -1,35 +1,43 @@
 # =============================================================================
 # Multi-stage Dockerfile for Copilot Studio Agent Direct Line MCP Server
-# Optimized for production with security best practices
+# Optimized for Azure Container Apps with security best practices
 # =============================================================================
 
 # -----------------------------------------------------------------------------
 # Stage 1: Dependencies
-# Install production dependencies only
+# Install production dependencies only with security hardening
 # -----------------------------------------------------------------------------
 FROM node:18-alpine AS deps
 
-# Install security updates
-RUN apk update && apk upgrade
+# Install security updates and CA certificates
+RUN apk update && \
+    apk upgrade && \
+    apk add --no-cache ca-certificates && \
+    rm -rf /var/cache/apk/*
 
 # Set working directory
 WORKDIR /app
 
-# Copy package files
+# Copy package files for dependency installation
 COPY package*.json ./
 
-# Install production dependencies only
-RUN npm ci --only=production && \
+# Install production dependencies with optimal settings
+# - Use npm ci for reproducible builds
+# - Only production dependencies
+# - Clean cache to reduce image size
+RUN npm ci --only=production --no-audit --no-fund && \
     npm cache clean --force
 
 # -----------------------------------------------------------------------------
 # Stage 2: Builder
-# Build TypeScript application
+# Build TypeScript application with build optimizations
 # -----------------------------------------------------------------------------
 FROM node:18-alpine AS builder
 
 # Install security updates
-RUN apk update && apk upgrade
+RUN apk update && \
+    apk upgrade && \
+    rm -rf /var/cache/apk/*
 
 # Set working directory
 WORKDIR /app
@@ -38,17 +46,24 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install all dependencies (including dev dependencies for build)
-RUN npm ci && \
+# Use npm ci for reproducible builds
+RUN npm ci --no-audit --no-fund && \
     npm cache clean --force
 
-# Copy source code
+# Copy TypeScript configuration and source code
+# Copying separately for better layer caching
 COPY tsconfig.json ./
 COPY src ./src
 
-# Build TypeScript
+# Build TypeScript to JavaScript
+# Output goes to ./dist directory
 RUN npm run build
 
-# Remove dev dependencies after build
+# Verify build output
+RUN ls -la dist/ && \
+    test -f dist/index.js || (echo "Build failed: dist/index.js not found" && exit 1)
+
+# Remove dev dependencies after build to reduce final image size
 RUN npm prune --production
 
 # -----------------------------------------------------------------------------
