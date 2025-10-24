@@ -7,7 +7,7 @@
 # Stage 1: Dependencies
 # Install production dependencies only with security hardening
 # -----------------------------------------------------------------------------
-FROM node:18-alpine AS deps
+FROM node:22-alpine AS deps
 
 # Install security updates and CA certificates
 RUN apk update && \
@@ -32,7 +32,7 @@ RUN npm ci --only=production --no-audit --no-fund && \
 # Stage 2: Builder
 # Build TypeScript application with build optimizations
 # -----------------------------------------------------------------------------
-FROM node:18-alpine AS builder
+FROM node:22-alpine AS builder
 
 # Install security updates
 RUN apk update && \
@@ -70,7 +70,7 @@ RUN npm prune --production
 # Stage 3: Runtime
 # Minimal runtime image with only necessary files
 # -----------------------------------------------------------------------------
-FROM node:18-alpine AS runtime
+FROM node:22-alpine AS runtime
 
 # Install security updates and dumb-init for proper signal handling
 RUN apk update && apk upgrade && \
@@ -123,7 +123,7 @@ LABEL version="1.0.5"
 # Stage 4: Development
 # Development image with dev dependencies and hot reload
 # -----------------------------------------------------------------------------
-FROM node:18-alpine AS development
+FROM node:22-alpine AS development
 
 # Install security updates
 RUN apk update && apk upgrade
