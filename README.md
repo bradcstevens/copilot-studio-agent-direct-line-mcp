@@ -7,6 +7,10 @@ Easily install the Copilot Studio Agent Direct Line MCP Server for VS Code or VS
 
 This TypeScript project provides a **local** MCP server for Microsoft Copilot Studio Agents, enabling you to interact with your Copilot Studio Agents directly from your code editor via the Direct Line 3.0 API.
 
+<a href="https://glama.ai/mcp/servers/@bradcstevens/copilot-studio-agent-direct-line-mcp">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@bradcstevens/copilot-studio-agent-direct-line-mcp/badge" alt="Copilot Studio Agent Direct Line Server MCP server" />
+</a>
+
 ## 📄 Table of Contents
 
 - [⭐ Copilot Studio Agent Direct Line MCP Server](#-copilot-studio-agent-direct-line-mcp-server)
